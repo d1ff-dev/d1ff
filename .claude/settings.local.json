@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(git config:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find /c/Users/mensh/OneDrive/Документы/GitHub/d1ff/src -type f -name *.py)",
+      "Bash(grep -r \"router\\\\|Route\\\\|get\\\\|post\" /c/Users/mensh/OneDrive/Документы/GitHub/d1ff/src/d1ff/web/*.py)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
