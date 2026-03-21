@@ -28,6 +28,18 @@ class APIKeyRecord(BaseModel):
     updated_at: datetime
 
 
+class User(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int | None = None
+    github_id: int
+    login: str
+    email: str | None = None
+    avatar_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class InstallationConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 

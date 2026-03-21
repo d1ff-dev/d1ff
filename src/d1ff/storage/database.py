@@ -23,6 +23,7 @@ async def init_db(database_url: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     async with aiosqlite.connect(path) as conn:
+        await conn.execute("PRAGMA foreign_keys = ON")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS installations (
@@ -84,6 +85,29 @@ async def init_db(database_url: str) -> None:
                 pr_number        INTEGER NOT NULL,
                 repo_full_name   TEXT NOT NULL,
                 created_at       TEXT NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                github_id       INTEGER UNIQUE NOT NULL,
+                login           TEXT NOT NULL,
+                email           TEXT,
+                avatar_url      TEXT,
+                encrypted_token TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_installations (
+                user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                installation_id INTEGER NOT NULL REFERENCES installations(installation_id) ON DELETE CASCADE,
+                PRIMARY KEY (user_id, installation_id)
             )
             """
         )

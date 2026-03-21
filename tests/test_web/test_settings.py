@@ -1,4 +1,4 @@
-"""Tests for the settings page — API key and provider configuration UI (AC: 1, 2, 3, 4)."""
+"""Tests for the settings page — API key and provider configuration UI (AC: 3, 5)."""
 
 import datetime
 import json
@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from d1ff.config import get_settings
 from d1ff.main import app
 from d1ff.storage.models import Installation
+from d1ff.web.router import GITHUB_APP_INSTALL_URL
 
 # Minimal env vars required by AppSettings
 REQUIRED_ENV = {
@@ -23,7 +24,7 @@ REQUIRED_ENV = {
     "DATABASE_URL": "sqlite+aiosqlite:///./test_settings.db",
 }
 
-FAKE_USER = {"login": "testuser", "id": 12345, "name": "Test User"}
+FAKE_USER = {"login": "testuser", "github_id": 12345, "name": "Test User", "user_id": 1}
 
 
 def make_session_cookie(user: dict, secret_key: str) -> str:
@@ -62,27 +63,27 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
 
 @pytest.fixture
 def session_cookie() -> str:
-    # The app's SessionMiddleware reads SESSION_SECRET_KEY from os.environ at module load time
-    # (before any test monkeypatching). The fallback defined in main.py is
-    # "dev-placeholder-not-for-production". We must sign with this exact same secret
-    # because the middleware instance is shared across tests and was created at import time.
-    return make_session_cookie(FAKE_USER, "dev-placeholder-not-for-production")
+    # Use the actual session secret that the middleware was created with at import time.
+    # This may come from .env or fall back to "dev-placeholder-not-for-production".
+    from d1ff.main import _session_secret
+
+    return make_session_cookie(FAKE_USER, _session_secret)
 
 
-async def test_settings_page_unauthenticated_redirects_to_login() -> None:
-    """GET /settings without session → 302 to /login."""
+async def test_settings_page_unauthenticated_redirects_to_github_app() -> None:
+    """GET /settings without session → 302 to GitHub App install URL."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/settings", follow_redirects=False)
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
+    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
 
 
 async def test_settings_page_shows_installations(session_cookie: str) -> None:
-    """Authenticated session, mock list_installations returns one installation; form renders."""
+    """Authenticated session, mock list_installations_for_user returns one installation; form renders."""
     with (
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -98,7 +99,6 @@ async def test_settings_page_shows_installations(session_cookie: str) -> None:
 
     assert resp.status_code == 200
     assert "testuser" in resp.text
-    # form for the installation is rendered
     assert 'name="installation_id"' in resp.text
     assert 'name="provider"' in resp.text
     assert 'name="api_key"' in resp.text
@@ -110,7 +110,7 @@ async def test_settings_page_shows_existing_config(session_cookie: str) -> None:
 
     with (
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -125,14 +125,10 @@ async def test_settings_page_shows_existing_config(session_cookie: str) -> None:
             resp = await client.get("/settings", follow_redirects=False)
 
     assert resp.status_code == 200
-    # provider pre-selected
     assert "selected" in resp.text
     assert "anthropic" in resp.text
-    # model value pre-filled
     assert "claude-opus-4-5" in resp.text
-    # encrypted key must NOT appear in the response (sanitized out by _sanitize_config)
     assert "enc123" not in resp.text
-    # placeholder indicates key is saved
     assert "Key saved" in resp.text
 
 
@@ -146,7 +142,7 @@ async def test_post_settings_saves_config(session_cookie: str) -> None:
             new=mock_upsert,
         ),
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
     ):
@@ -173,7 +169,7 @@ async def test_post_settings_saves_config(session_cookie: str) -> None:
 
 
 async def test_post_settings_unauthenticated_redirects() -> None:
-    """POST /settings without session → 302 to /login."""
+    """POST /settings without session → 302 to GitHub App install URL."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/settings",
@@ -187,7 +183,7 @@ async def test_post_settings_unauthenticated_redirects() -> None:
         )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
+    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
 
 
 async def test_post_settings_invalid_provider_rejected(session_cookie: str) -> None:
@@ -200,7 +196,7 @@ async def test_post_settings_invalid_provider_rejected(session_cookie: str) -> N
             new=mock_upsert,
         ),
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -238,7 +234,7 @@ async def test_post_settings_rejects_unowned_installation(session_cookie: str) -
             new=mock_upsert,
         ),
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -270,7 +266,7 @@ async def test_settings_page_success_message(session_cookie: str) -> None:
     """GET /settings?saved=true → page shows success confirmation text."""
     with (
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(

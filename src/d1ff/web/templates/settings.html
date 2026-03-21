@@ -66,9 +66,9 @@
 </article>
 {% else %}
 <div style="text-align:center; padding: 2rem 0;">
-  <p>To get started, install d1ff on your GitHub account and select the repositories you want reviewed.</p>
-  <a href="https://github.com/apps/d1ff-app/installations/new" role="button" style="display:inline-block; margin-top:1rem;">Install d1ff on GitHub</a>
-  <p style="margin-top:1.5rem;"><small>Already installed? <a href="/settings">Refresh this page</a> — it may take a few seconds for the installation to appear.</small></p>
+  <p>No installations found. This can happen if the GitHub App hasn't been installed yet, or if the webhook hasn't arrived.</p>
+  <a href="/logout" role="button" style="display:inline-block; margin-top:1rem;">Re-authenticate with GitHub</a>
+  <p style="margin-top:1.5rem;"><small>This will re-sync your installations from GitHub.</small></p>
 </div>
 {% endfor %}
 {% endblock %}

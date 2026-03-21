@@ -23,7 +23,7 @@ REQUIRED_ENV = {
     "DATABASE_URL": "sqlite+aiosqlite:///./test_settings_endpoint.db",
 }
 
-FAKE_USER = {"login": "testuser", "id": 12345, "name": "Test User"}
+FAKE_USER = {"login": "testuser", "github_id": 12345, "name": "Test User", "user_id": 1}
 
 FAKE_INSTALLATION = Installation(
     installation_id=42,
@@ -58,7 +58,9 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
 
 @pytest.fixture
 def session_cookie() -> str:
-    return make_session_cookie(FAKE_USER, "dev-placeholder-not-for-production")
+    from d1ff.main import _session_secret
+
+    return make_session_cookie(FAKE_USER, _session_secret)
 
 
 async def test_post_settings_saves_custom_endpoint(session_cookie: str) -> None:
@@ -71,7 +73,7 @@ async def test_post_settings_saves_custom_endpoint(session_cookie: str) -> None:
             new=mock_upsert,
         ),
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
     ):
@@ -108,7 +110,7 @@ async def test_post_settings_clears_custom_endpoint(session_cookie: str) -> None
             new=mock_upsert,
         ),
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
     ):
@@ -142,7 +144,7 @@ async def test_post_settings_invalid_endpoint_rejected(session_cookie: str) -> N
             new=mock_upsert,
         ),
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -182,7 +184,7 @@ async def test_settings_page_shows_existing_endpoint(session_cookie: str) -> Non
 
     with (
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -211,7 +213,7 @@ async def test_settings_page_shows_empty_endpoint(session_cookie: str) -> None:
 
     with (
         patch(
-            "d1ff.web.router.InstallationRepository.list_installations",
+            "d1ff.web.router.InstallationRepository.list_installations_for_user",
             new=AsyncMock(return_value=[FAKE_INSTALLATION]),
         ),
         patch(
@@ -226,7 +228,5 @@ async def test_settings_page_shows_empty_endpoint(session_cookie: str) -> None:
             resp = await client.get("/settings", follow_redirects=False)
 
     assert resp.status_code == 200
-    # endpoint field should not have a value (empty or no value attribute set to a URL)
     assert 'name="custom_endpoint"' in resp.text
-    # The value should be empty (no real URL present for the field)
     assert "https://my-endpoint.com" not in resp.text

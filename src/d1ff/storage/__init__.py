@@ -13,7 +13,7 @@ from d1ff.storage.installation_repo import (
     get_installation,
     upsert_installation,
 )
-from d1ff.storage.models import APIKeyRecord, Installation, InstallationConfig
+from d1ff.storage.models import APIKeyRecord, Installation, InstallationConfig, User
 from d1ff.storage.pr_state_repo import get_pr_state, set_pr_state
 
 __all__ = [
@@ -22,6 +22,7 @@ __all__ = [
     "Installation",
     "APIKeyRecord",
     "InstallationConfig",
+    "User",
     "upsert_installation",
     "get_installation",
     "delete_installation",

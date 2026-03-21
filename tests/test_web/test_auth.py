@@ -1,11 +1,11 @@
-"""Tests for web UI authentication dependency and session handling (AC: 3, 4)."""
+"""Tests for web UI authentication dependency and session handling (AC: 5, 7)."""
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from d1ff.config import get_settings
 from d1ff.main import app
-from d1ff.web.auth import require_login
+from d1ff.web.auth import GITHUB_APP_INSTALL_URL, require_login
 
 # Minimal env vars required by AppSettings
 REQUIRED_ENV = {
@@ -29,23 +29,21 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
 
-async def test_unauthenticated_settings_redirects_to_login() -> None:
-    """GET /settings without a valid session redirects to /login with 302."""
+async def test_unauthenticated_settings_redirects_to_github_app() -> None:
+    """GET /settings without a valid session redirects to GitHub App install URL with 302."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/settings", follow_redirects=False)
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
+    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
 
 
 async def test_require_login_returns_user_from_session() -> None:
     """require_login dependency returns user dict when session contains 'user'."""
     from starlette.requests import Request
 
-    # Create a minimal mock request with a session containing user data
-    fake_user = {"login": "testuser", "id": 12345, "name": "Test User"}
+    fake_user = {"login": "testuser", "github_id": 12345, "name": "Test User", "user_id": 1}
 
-    # Use a minimal Starlette Request with a mock scope
     scope = {
         "type": "http",
         "method": "GET",
@@ -81,15 +79,6 @@ async def test_require_login_redirects_when_no_session() -> None:
 
 async def test_authenticated_user_accesses_settings() -> None:
     """A request with a valid session user cookie gets a non-redirect response on /settings."""
-    # We cannot easily set a signed session cookie in tests without the exact secret key.
-    # Instead verify the route logic: unauthenticated → redirect, authenticated → 200.
-    # The session check in /settings uses request.session.get("user"), which is empty
-    # for a fresh client (no signed cookie), so we verify the redirect behavior.
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # Without session cookie → redirect
         resp = await client.get("/settings", follow_redirects=False)
         assert resp.status_code == 302
-
-    # With a manually crafted session, we would get 200, but that requires the session secret.
-    # The session secret at test time is the os.environ fallback placeholder.
-    # We verify the auth guard works (redirect without session).

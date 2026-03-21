@@ -1,4 +1,4 @@
-"""Integration tests for GitHub OAuth routes (AC: 1, 2)."""
+"""Integration tests for GitHub OAuth routes — unified onboarding flow (AC: 1, 2, 4, 6, 7, 10)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from d1ff.config import get_settings
 from d1ff.main import app
+from d1ff.web.router import GITHUB_APP_INSTALL_URL
 
 # Minimal env vars required by AppSettings
 REQUIRED_ENV = {
@@ -61,18 +62,47 @@ async def test_login_redirects_unauthenticated_to_github(reset_oauth: None) -> N
     assert "github.com" in resp.headers["location"]
 
 
-async def test_callback_creates_session(reset_oauth: None) -> None:
-    """GET /auth/github/callback with mocked token exchange creates a user session."""
+async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) -> None:
+    """GET /auth/github/callback with mocked token exchange creates user, syncs installations, redirects to /settings."""
     fake_token = {"access_token": "gho_fake", "token_type": "bearer"}
-    fake_user = {"login": "testuser", "id": 12345, "name": "Test User"}
+    fake_user = {"login": "testuser", "id": 12345, "name": "Test User", "email": "test@example.com", "avatar_url": "https://avatars.example.com/u/12345"}
+    fake_installations = {"installations": [{"id": 42}, {"id": 43}]}
 
     mock_user_resp = MagicMock()
+    mock_user_resp.status_code = 200
     mock_user_resp.json.return_value = fake_user
 
-    with patch("d1ff.web.router.oauth") as mock_oauth:
+    mock_installations_resp = MagicMock()
+    mock_installations_resp.status_code = 200
+    mock_installations_resp.json.return_value = fake_installations
+
+    async def mock_get(url: str, token: dict = None, params: dict = None) -> MagicMock:
+        if url == "user":
+            return mock_user_resp
+        if url == "user/installations":
+            return mock_installations_resp
+        raise ValueError(f"Unexpected URL: {url}")
+
+    mock_upsert_user = AsyncMock(return_value=1)
+    mock_sync_installations = AsyncMock()
+
+    with (
+        patch("d1ff.web.router.oauth") as mock_oauth,
+        patch("d1ff.web.router.encrypt_value", return_value="encrypted_token_value"),
+        patch.object(
+            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            "upsert_user",
+            mock_upsert_user,
+        ),
+        patch.object(
+            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            "sync_user_installations",
+            mock_sync_installations,
+        ),
+    ):
         mock_client = MagicMock()
         mock_client.authorize_access_token = AsyncMock(return_value=fake_token)
-        mock_client.get = AsyncMock(return_value=mock_user_resp)
+        mock_client.get = AsyncMock(side_effect=mock_get)
         mock_oauth.github = mock_client
 
         async with AsyncClient(
@@ -83,36 +113,24 @@ async def test_callback_creates_session(reset_oauth: None) -> None:
                 follow_redirects=False,
             )
 
-    # After callback, user is redirected to /settings
     assert resp.status_code == 302
     assert resp.headers["location"] == "/settings"
+    mock_upsert_user.assert_called_once_with(
+        github_id=12345,
+        login="testuser",
+        email="test@example.com",
+        avatar_url="https://avatars.example.com/u/12345",
+        encrypted_token="encrypted_token_value",
+    )
+    mock_sync_installations.assert_called_once_with(1, [42, 43])
 
 
-async def test_logout_clears_session() -> None:
-    """GET /logout should clear the session and redirect to /login."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # First set a session by manually setting a cookie (or just call logout directly)
-        resp = await client.get("/logout", follow_redirects=False)
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
-
-
-async def test_unauthenticated_settings_redirects_to_login() -> None:
-    """GET /settings without a session should return 302 redirect to /login."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/settings", follow_redirects=False)
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
-
-
-async def test_callback_error_redirects_to_login(reset_oauth: None) -> None:
-    """GET /auth/github/callback should redirect to /login when token exchange fails."""
+async def test_callback_error_redirects_to_github_app(reset_oauth: None) -> None:
+    """GET /auth/github/callback should redirect to GitHub App install URL when token exchange fails."""
     with patch("d1ff.web.router.oauth") as mock_oauth:
         mock_client = MagicMock()
         mock_client.authorize_access_token = AsyncMock(
-            side_effect=Exception("OAuth state mismatch")
+            side_effect=KeyError("OAuth state mismatch")
         )
         mock_oauth.github = mock_client
 
@@ -125,4 +143,79 @@ async def test_callback_error_redirects_to_login(reset_oauth: None) -> None:
             )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
+    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
+
+
+async def test_callback_empty_installations(reset_oauth: None) -> None:
+    """OAuth callback with no installations returned still creates user and redirects."""
+    fake_token = {"access_token": "gho_fake", "token_type": "bearer"}
+    fake_user = {"login": "newuser", "id": 99999, "name": "New User"}
+    fake_installations = {"installations": []}
+
+    mock_user_resp = MagicMock()
+    mock_user_resp.status_code = 200
+    mock_user_resp.json.return_value = fake_user
+
+    mock_installations_resp = MagicMock()
+    mock_installations_resp.status_code = 200
+    mock_installations_resp.json.return_value = fake_installations
+
+    async def mock_get(url: str, token: dict = None, params: dict = None) -> MagicMock:
+        if url == "user":
+            return mock_user_resp
+        if url == "user/installations":
+            return mock_installations_resp
+        raise ValueError(f"Unexpected URL: {url}")
+
+    mock_upsert_user = AsyncMock(return_value=5)
+    mock_sync_installations = AsyncMock()
+
+    with (
+        patch("d1ff.web.router.oauth") as mock_oauth,
+        patch("d1ff.web.router.encrypt_value", return_value="enc_tok"),
+        patch.object(
+            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            "upsert_user",
+            mock_upsert_user,
+        ),
+        patch.object(
+            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            "sync_user_installations",
+            mock_sync_installations,
+        ),
+    ):
+        mock_client = MagicMock()
+        mock_client.authorize_access_token = AsyncMock(return_value=fake_token)
+        mock_client.get = AsyncMock(side_effect=mock_get)
+        mock_oauth.github = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/auth/github/callback?code=fake_code&state=fake_state",
+                follow_redirects=False,
+            )
+
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/settings"
+    mock_upsert_user.assert_called_once()
+    mock_sync_installations.assert_called_once_with(5, [])
+
+
+async def test_logout_redirects_to_github_app() -> None:
+    """GET /logout should clear the session and redirect to GitHub App install URL."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/logout", follow_redirects=False)
+
+    assert resp.status_code == 302
+    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
+
+
+async def test_unauthenticated_settings_redirects_to_github_app() -> None:
+    """GET /settings without a session should return 302 redirect to GitHub App install URL."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/settings", follow_redirects=False)
+
+    assert resp.status_code == 302
+    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
