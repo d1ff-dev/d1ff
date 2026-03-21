@@ -13,3 +13,4 @@ dist/
 /_bmad-output
 .claude/settings.local.json
 1.md
+.claude/settings.local.json

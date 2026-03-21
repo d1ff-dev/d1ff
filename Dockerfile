@@ -36,9 +36,10 @@ COPY --from=builder /app/prompts /app/prompts
 # Create volume mount point for SQLite
 RUN mkdir -p /data
 
-EXPOSE 8000
+ENV PORT=8000
+EXPOSE ${PORT}
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\",8000)}/health')" || exit 1
 
-CMD ["uvicorn", "d1ff.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD sh -c "uvicorn d1ff.main:app --host 0.0.0.0 --port ${PORT}"
