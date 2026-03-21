@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
+from d1ff.config import get_settings
 from d1ff.github.oauth_handler import oauth
 from d1ff.storage.api_key_repo import get_api_key_config, upsert_api_key_for_installation
 from d1ff.storage.database import get_db_connection
@@ -51,7 +52,8 @@ async def login_page(request: Request) -> Response:
 @router.get("/auth/github/login")
 async def github_login(request: Request) -> Response:
     """Initiate GitHub OAuth authorization flow."""
-    redirect_uri = request.url_for("github_callback")
+    settings = get_settings()
+    redirect_uri = f"{settings.BASE_URL}/auth/github/callback"
     return await oauth.github.authorize_redirect(request, redirect_uri)  # type: ignore[no-any-return]
 
 
