@@ -11,3 +11,4 @@ dist/
 /.cursor/skills
 /_bmad
 /_bmad-output
+.claude/settings.local.json

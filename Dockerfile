@@ -7,14 +7,17 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy dependency files first (cache layer)
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
-# Install only runtime deps (no dev tools) into project venv
-RUN uv sync --frozen --no-dev
+# Install only runtime deps without the project itself (cache layer)
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy source code and prompt templates
 COPY src/ ./src/
 COPY prompts/ ./prompts/
+
+# Now install the project package into the venv
+RUN uv sync --frozen --no-dev
 
 # Stage 2: Runtime — minimal image
 FROM python:3.12-slim AS runtime
