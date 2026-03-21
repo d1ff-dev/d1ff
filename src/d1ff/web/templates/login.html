@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in to d1ff{% endblock %}
+
+{% block content %}
+<article style="max-width: 480px; margin: 4rem auto; text-align: center;">
+    <header>
+        <h1>d1ff</h1>
+        <p>AI-powered code review</p>
+    </header>
+    <p>Sign in with your GitHub account to manage your installation settings.</p>
+    <a href="/auth/github/login" role="button">Sign in with GitHub</a>
+</article>
+{% endblock %}

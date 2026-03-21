@@ -1,0 +1,29 @@
+diff --git a/src/api/users.py b/src/api/users.py
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/src/api/users.py
+@@ -0,0 +1,24 @@
++"""User search API endpoint."""
++
++import sqlite3
++from flask import Flask, request, jsonify
++
++app = Flask(__name__)
++
++
++@app.route("/users/search")
++def search_users():
++    query = request.args.get("q", "")
++    conn = sqlite3.connect("users.db")
++    cursor = conn.cursor()
++    # BUG: SQL injection — user input interpolated directly into query string
++    results = cursor.execute(
++        f"SELECT id, name, email FROM users WHERE name LIKE '%{query}%'"
++    ).fetchall()
++    conn.close()
++    return jsonify([{"id": r[0], "name": r[1], "email": r[2]} for r in results])
++
++
++if __name__ == "__main__":
++    app.run(debug=True)

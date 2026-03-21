@@ -1,0 +1,14 @@
+{
+  "pr_id": "pr-001-sql-injection",
+  "repo": "example-org/example-api",
+  "title": "Add user search endpoint",
+  "description": "Adds a GET /users/search?q= endpoint. Contains an unsanitised SQL query — classic injection vector.",
+  "known_bugs": [
+    {
+      "file": "src/api/users.py",
+      "line": 12,
+      "description": "SQL injection via unescaped user input — `query` is interpolated directly into the SQL string without parameterisation.",
+      "severity": "critical"
+    }
+  ]
+}

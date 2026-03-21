@@ -1,0 +1,16 @@
+diff --git a/src/utils/helpers.py b/src/utils/helpers.py
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/src/utils/helpers.py
+@@ -0,0 +1,10 @@
++"""Helper utilities."""
++
++
++def divide(a: int, b: int) -> float:
++    # BUG: no zero-division guard
++    return a / b
++
++
++def greet(name: str) -> str:
++    return f"Hello, {name}!"

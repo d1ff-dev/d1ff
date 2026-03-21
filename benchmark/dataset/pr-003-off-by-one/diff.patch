@@ -1,0 +1,27 @@
+diff --git a/src/utils/pagination.py b/src/utils/pagination.py
+new file mode 100644
+index 0000000..c3d4e5f
+--- /dev/null
++++ b/src/utils/pagination.py
+@@ -0,0 +1,22 @@
++"""Pagination helpers for list API endpoints."""
++
++from typing import TypeVar
++
++T = TypeVar("T")
++
++
++def paginate(items: list[T], page: int, page_size: int = 20) -> list[T]:
++    """Return items for the requested page (0-indexed).
++
++    BUG: off-by-one — end should be (page + 1) * page_size, not page * page_size.
++    As written this returns items[start:start], which is always an empty list for page > 0.
++    """
++    start = page * page_size
++    end = page * page_size  # BUG: should be (page + 1) * page_size
++    return items[start:end]
++
++
++def total_pages(total_items: int, page_size: int = 20) -> int:
++    """Return total number of pages for a given item count."""
++    return (total_items + page_size - 1) // page_size

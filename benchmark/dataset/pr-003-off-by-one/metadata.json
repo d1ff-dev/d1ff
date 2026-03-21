@@ -1,0 +1,14 @@
+{
+  "pr_id": "pr-003-off-by-one",
+  "repo": "example-org/example-utils",
+  "title": "Add pagination helper for list endpoints",
+  "description": "Utility function to slice a result list for paginated API responses. Contains an off-by-one error that causes the last item of each page to be omitted.",
+  "known_bugs": [
+    {
+      "file": "src/utils/pagination.py",
+      "line": 11,
+      "description": "Off-by-one error: slice uses `end` exclusive index but caller passes `page * page_size` which already excludes the last item — should be `(page + 1) * page_size`.",
+      "severity": "high"
+    }
+  ]
+}

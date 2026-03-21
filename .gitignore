@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+d1ff.db
+dist/
+/.claude/skills
+/.cursor/skills
+/_bmad
+/_bmad-output

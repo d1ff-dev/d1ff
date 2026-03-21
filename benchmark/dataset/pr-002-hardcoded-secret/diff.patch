@@ -1,0 +1,25 @@
+diff --git a/src/payments/stripe_client.js b/src/payments/stripe_client.js
+new file mode 100644
+index 0000000..b2c3d4e
+--- /dev/null
++++ b/src/payments/stripe_client.js
+@@ -0,0 +1,20 @@
++// Stripe payment client
++
++const Stripe = require("stripe");
++
++const stripe = Stripe("sk_live_4eC39HqLyjWDarjtT1zdp7dc");  // BUG: hardcoded live secret key
++
++async function createSubscription(customerId, priceId) {
++  const subscription = await stripe.subscriptions.create({
++    customer: customerId,
++    items: [{ price: priceId }],
++    payment_behavior: "default_incomplete",
++    expand: ["latest_invoice.payment_intent"],
++  });
++  return subscription;
++}
++
++module.exports = {
++  createSubscription,
++};

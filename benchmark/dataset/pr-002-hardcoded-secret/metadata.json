@@ -1,0 +1,14 @@
+{
+  "pr_id": "pr-002-hardcoded-secret",
+  "repo": "example-org/example-service",
+  "title": "Add Stripe payment integration",
+  "description": "Wires up Stripe for subscription billing. Contains a hardcoded live API secret key committed to source.",
+  "known_bugs": [
+    {
+      "file": "src/payments/stripe_client.js",
+      "line": 5,
+      "description": "Hardcoded Stripe live secret key — must never be committed to source control.",
+      "severity": "critical"
+    }
+  ]
+}

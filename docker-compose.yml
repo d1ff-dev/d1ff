@@ -1,0 +1,45 @@
+# Manual verification procedure (smoke test):
+#
+# 1. Build the image:
+#    docker build -t d1ff .
+#
+# 2. Run the container (requires a valid .env file with required vars set):
+#    docker run -v d1ff-data:/data -p 8000:8000 --env-file .env d1ff
+#
+#    For Docker-infra-only smoke testing (stub values to bypass fail-fast):
+#    docker run -v d1ff-data:/data -p 8000:8000 \
+#      -e GITHUB_APP_ID=1 \
+#      -e GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xHn/ygWep4PAtEsHAcMCRCTxHFWkWgvMbOar\n-----END RSA PRIVATE KEY-----" \
+#      -e GITHUB_WEBHOOK_SECRET=test \
+#      -e ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") \
+#      d1ff
+#
+# 3. Verify health endpoint responds:
+#    curl http://localhost:8000/health
+#    Expected: JSON with subsystem statuses, HTTP 200
+#
+# 4. Verify Docker healthcheck status (after start_period of 15s):
+#    docker inspect <container_id> --format='{{.State.Health.Status}}'
+#    Expected: "healthy"
+
+services:
+  d1ff:
+    build: .
+    # Or use a pre-built image:
+    # image: ghcr.io/d1ff-dev/d1ff:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - d1ff-data:/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  d1ff-data:
