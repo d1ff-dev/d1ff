@@ -158,6 +158,7 @@ class InstallationRepository:
             "SELECT id FROM users WHERE github_id = ?", (github_id,)
         ) as select_cursor:
             row = await select_cursor.fetchone()
+            assert row is not None, "upsert should always produce a row"
             return int(row["id"])
 
     async def sync_user_installations(self, user_id: int, installation_ids: list[int]) -> None:

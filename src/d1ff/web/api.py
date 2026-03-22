@@ -33,7 +33,7 @@ def _get_session_user(request: Request) -> dict[str, object]:
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return user  # type: ignore[return-value]
+    return dict(user)
 
 
 def _sanitize_config(cfg: dict[str, str | None] | None) -> dict[str, str | bool | None]:
@@ -55,7 +55,7 @@ async def get_me(
     """Return current authenticated user from session."""
     user = _get_session_user(request)
     repo = GlobalSettingsRepository(db)
-    has_settings = await repo.has_settings(user_id=int(user["user_id"]))
+    has_settings = await repo.has_settings(user_id=int(str(user["user_id"])))
     return {**user, "hasGlobalSettings": has_settings}
 
 
@@ -67,18 +67,20 @@ async def get_installations(
     """Return installations and their configs for the authenticated user."""
     user = _get_session_user(request)
     repo = InstallationRepository(db)
-    user_installations = await repo.list_installations_for_user(int(user["user_id"]))  # type: ignore[arg-type]
+    user_installations = await repo.list_installations_for_user(int(str(user["user_id"])))
     result = []
     for inst in user_installations:
         cfg = await get_api_key_config(inst.installation_id)
-        result.append({
-            "installation": {
-                "installation_id": inst.installation_id,
-                "account_login": inst.account_login,
-                "account_type": inst.account_type,
-            },
-            "config": _sanitize_config(cfg),
-        })
+        result.append(
+            {
+                "installation": {
+                    "installation_id": inst.installation_id,
+                    "account_login": inst.account_login,
+                    "account_type": inst.account_type,
+                },
+                "config": _sanitize_config(cfg),
+            }
+        )
     return result
 
 
@@ -104,7 +106,7 @@ async def get_global_settings(
 ) -> dict[str, str | bool | None]:
     user = _get_session_user(request)
     repo = GlobalSettingsRepository(db)
-    settings = await repo.get(user_id=int(user["user_id"]))  # type: ignore[arg-type]
+    settings = await repo.get(user_id=int(str(user["user_id"])))
     if settings is None:
         raise HTTPException(status_code=404, detail="Global settings not configured")
     return {
@@ -126,12 +128,14 @@ async def update_global_settings(
         raise HTTPException(status_code=400, detail=f"Invalid provider: {body.provider}")
     endpoint = body.custom_endpoint.strip() or None
     if endpoint and not (endpoint.startswith("http://") or endpoint.startswith("https://")):
-        raise HTTPException(status_code=400, detail="Custom endpoint must start with http:// or https://")
+        raise HTTPException(
+            status_code=400, detail="Custom endpoint must start with http:// or https://"
+        )
     settings = get_settings()
     encrypted_key = encrypt_value(body.api_key, settings.ENCRYPTION_KEY)
     repo = GlobalSettingsRepository(db)
     await repo.upsert(
-        user_id=int(user["user_id"]),  # type: ignore[arg-type]
+        user_id=int(str(user["user_id"])),
         provider=body.provider,
         model=body.model,
         encrypted_api_key=encrypted_key,
@@ -150,7 +154,7 @@ async def update_settings(
     """Save API key and provider/model config for an installation."""
     user = _get_session_user(request)
     repo = InstallationRepository(db)
-    user_installations = await repo.list_installations_for_user(int(user["user_id"]))  # type: ignore[arg-type]
+    user_installations = await repo.list_installations_for_user(int(str(user["user_id"])))
     user_installation_ids = {i.installation_id for i in user_installations}
 
     if body.installation_id not in user_installation_ids:
@@ -179,15 +183,13 @@ async def get_repositories(
     db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
 ) -> list[dict[str, object]]:
     user = _get_session_user(request)
-    user_id = int(user["user_id"])
+    user_id = int(str(user["user_id"]))
 
     repo = InstallationRepository(db)
     installations = await repo.list_installations_for_user(user_id)
 
     # Retrieve user's GitHub token from DB
-    cursor = await db.execute(
-        "SELECT encrypted_token FROM users WHERE id = ?", (user_id,)
-    )
+    cursor = await db.execute("SELECT encrypted_token FROM users WHERE id = ?", (user_id,))
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(status_code=500, detail="User record not found")
@@ -206,19 +208,23 @@ async def get_repositories(
                 params={"per_page": 100, "page": page},
             )
             if resp.status_code != 200:
-                logger.warning("github_repos_fetch_failed",
-                               installation_id=inst.installation_id,
-                               status=resp.status_code)
+                logger.warning(
+                    "github_repos_fetch_failed",
+                    installation_id=inst.installation_id,
+                    status=resp.status_code,
+                )
                 break
             data = resp.json()
             repos = data.get("repositories", [])
             for r in repos:
-                all_repos.append({
-                    "name": r["name"],
-                    "full_name": r["full_name"],
-                    "installation_id": inst.installation_id,
-                    "private": r.get("private", False),
-                })
+                all_repos.append(
+                    {
+                        "name": r["name"],
+                        "full_name": r["full_name"],
+                        "installation_id": inst.installation_id,
+                        "private": r.get("private", False),
+                    }
+                )
             if len(repos) < 100:
                 break
             page += 1

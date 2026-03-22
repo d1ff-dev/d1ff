@@ -3,8 +3,8 @@
 import aiosqlite
 import httpx
 import structlog
-from authlib.integrations.base_client.errors import (
-    MismatchingStateError,  # type: ignore[import-untyped]
+from authlib.integrations.base_client.errors import (  # type: ignore[import-untyped]
+    MismatchingStateError,
 )
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -49,7 +49,7 @@ async def _exchange_code_for_token(code: str) -> str | None:
             logger.error("github_token_exchange_failed", status=resp.status_code)
             return None
         data = resp.json()
-        return data.get("access_token")
+        return str(data["access_token"]) if "access_token" in data else None
 
 
 async def _create_session(
