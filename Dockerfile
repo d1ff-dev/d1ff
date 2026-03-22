@@ -1,5 +1,13 @@
-# Stage 1: Builder — install dependencies
-FROM python:3.12-slim AS builder
+# Stage 1: Build React SPA
+FROM node:22-alpine AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Build Python package
+FROM python:3.12-slim AS backend-builder
 
 # Install uv from official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -19,7 +27,7 @@ COPY prompts/ ./prompts/
 # Now install the project package into the venv
 RUN uv sync --frozen --no-dev
 
-# Stage 2: Runtime — minimal image
+# Stage 3: Runtime — minimal image
 FROM python:3.12-slim AS runtime
 
 WORKDIR /app
@@ -28,10 +36,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# Copy venv and source from builder
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/src /app/src
-COPY --from=builder /app/prompts /app/prompts
+# Copy venv and source from backend-builder
+COPY --from=backend-builder /app/.venv /app/.venv
+COPY --from=backend-builder /app/src /app/src
+COPY --from=backend-builder /app/prompts /app/prompts
+
+# Copy compiled React SPA from frontend-builder
+COPY --from=frontend-builder /frontend/dist /app/static
 
 # Create volume mount point for SQLite
 RUN mkdir -p /data
