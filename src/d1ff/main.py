@@ -1,9 +1,12 @@
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
@@ -30,7 +33,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db(settings.DATABASE_URL)
     logger.info("storage initialized", database_url=settings.DATABASE_URL)
 
-    # Initialise GitHub App client and store in app state for use by dependencies
     app.state.github_client = GitHubAppClient(
         app_id=settings.GITHUB_APP_ID,
         private_key=settings.GITHUB_PRIVATE_KEY,
@@ -44,17 +46,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(title="d1ff", version="0.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
-# SessionMiddleware is added at module level using os.environ so that import-time
-# side effects are avoided (pydantic settings validation runs only in lifespan).
-# The lifespan still calls get_settings() which enforces fail-fast for missing vars.
 _session_secret = os.environ.get("SESSION_SECRET_KEY", "dev-placeholder-not-for-production")
 app.add_middleware(SessionMiddleware, secret_key=_session_secret)
+
+# Router registration order matters: specific routes before SPA fallback
 app.include_router(observability_router)
 app.include_router(api_router)
 app.include_router(webhook_router)
 app.include_router(web_router)
 
+# Static files + SPA fallback — only registered when the built bundle exists
+# (i.e., in Docker). In dev mode (uvicorn from source), this block is skipped
+# and the app runs as a pure API server.
+_static_dir = Path(__file__).parent.parent.parent / "static"
+if _static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    return {"status": "ok", "version": "0.1.0"}
+    @app.get("/{path:path}")
+    async def spa_fallback(path: str) -> FileResponse:
+        return FileResponse(str(_static_dir / "index.html"))
