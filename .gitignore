@@ -19,3 +19,5 @@ dist/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+.claude/settings.json
+.claude/settings.local.json
