@@ -19,7 +19,6 @@ from d1ff.observability import configure_logging
 from d1ff.observability.router import router as observability_router
 from d1ff.storage import init_db
 from d1ff.web import api_router, web_router
-from d1ff.web.repo_cache import RepoCache
 from d1ff.webhook import webhook_router
 
 logger = structlog.get_logger()
@@ -39,8 +38,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         private_key=settings.GITHUB_PRIVATE_KEY,
     )
     logger.info("github_app_client_initialized", app_id=settings.GITHUB_APP_ID)
-
-    app.state.repo_cache = RepoCache(ttl_seconds=300)
 
     yield
     logger.info("d1ff shutting down")

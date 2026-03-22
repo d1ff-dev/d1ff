@@ -12,7 +12,6 @@ from d1ff.storage.database import get_db_connection
 from d1ff.storage.encryption import decrypt_value, encrypt_value
 from d1ff.storage.global_settings_repo import GlobalSettingsRepository
 from d1ff.storage.installation_repo import InstallationRepository
-from d1ff.web.repo_cache import RepoCache
 
 logger = structlog.get_logger()
 
@@ -182,12 +181,6 @@ async def get_repositories(
     user = _get_session_user(request)
     user_id = int(user["user_id"])
 
-    # Check cache first
-    cache: RepoCache = request.app.state.repo_cache
-    cached = cache.get(user_id=user_id)
-    if cached is not None:
-        return cached
-
     repo = InstallationRepository(db)
     installations = await repo.list_installations_for_user(user_id)
 
@@ -230,5 +223,4 @@ async def get_repositories(
                 break
             page += 1
 
-    cache.set(user_id=user_id, repos=all_repos)
     return all_repos

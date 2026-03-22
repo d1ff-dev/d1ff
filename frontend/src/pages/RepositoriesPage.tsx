@@ -22,7 +22,10 @@ export default function RepositoriesPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const filtered = repos
+  // Deduplicate repos by full_name (same repo can appear in multiple installations)
+  const unique = repos.filter((r, i, arr) => arr.findIndex(x => x.full_name === r.full_name) === i)
+
+  const filtered = unique
     .filter(r => r.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => sortAsc
       ? a.name.localeCompare(b.name)
@@ -63,8 +66,6 @@ export default function RepositoriesPage() {
           </div>
           <a
             href={appConfig?.github_app_install_url || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
             className="flex items-center gap-2 bg-green px-4 py-2.5 font-mono text-sm font-bold text-bg transition-all hover:shadow-[0_0_24px_rgba(29,158,117,0.3)] hover:brightness-110"
           >
             <span className="text-lg">+</span> Add Repositories
@@ -119,9 +120,9 @@ export default function RepositoriesPage() {
             <select
               value={rowsPerPage}
               onChange={e => { setRowsPerPage(Number(e.target.value)); setPage(1) }}
-              className="bg-transparent text-fg outline-none"
+              className="border border-border bg-bg-elevated text-fg outline-none"
             >
-              {ROWS_PER_PAGE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+              {ROWS_PER_PAGE_OPTIONS.map(n => <option key={n} value={n} className="bg-bg-elevated text-fg">{n}</option>)}
             </select>
           </span>
           <span>Page {page} of {totalPages}</span>
