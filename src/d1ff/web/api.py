@@ -31,7 +31,7 @@ async def get_public_config() -> dict[str, str]:
 
 def _get_session_user(request: Request) -> dict[str, object]:
     user = request.session.get("user")
-    if not user:
+    if not user or "user_id" not in user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return dict(user)
 
