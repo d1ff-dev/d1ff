@@ -20,7 +20,16 @@
       "Bash(python -c \"import os; print\\(repr\\(os.environ.get\\(''SESSION_SECRET_KEY''\\)\\)\\)\")",
       "Bash(python -m pytest tests/test_web/test_settings.py::test_settings_page_shows_installations -v -s)",
       "Bash(python -m pytest -v)",
-      "Bash(python -m pytest tests/test_web/ -v)"
+      "Bash(python -m pytest tests/test_web/ -v)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(python -m pytest tests/test_web/test_api.py -v)",
+      "Bash(python -m pytest tests/ -v --ignore=tests/test_web/test_settings.py --ignore=tests/test_web/test_settings_endpoint.py)",
+      "Bash(python -m pytest tests/test_config.py -v)",
+      "Bash(rm src/d1ff/web/templates/settings.html src/d1ff/web/templates/base.html)",
+      "Bash(rmdir src/d1ff/web/templates)",
+      "Bash(rm tests/test_web/test_settings.py tests/test_web/test_settings_endpoint.py)",
+      "Bash(python -m pytest tests/ -v)"
     ]
   }
 }
