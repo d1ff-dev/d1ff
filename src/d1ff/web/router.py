@@ -3,15 +3,17 @@
 import aiosqlite
 import httpx
 import structlog
-from authlib.integrations.base_client.errors import MismatchingStateError  # type: ignore[import-untyped]
+from authlib.integrations.base_client.errors import (
+    MismatchingStateError,  # type: ignore[import-untyped]
+)
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from starlette.responses import Response
 
 from d1ff.config import get_settings
 from d1ff.github.oauth_handler import oauth
-from d1ff.storage.encryption import encrypt_value
 from d1ff.storage.database import get_db_connection
+from d1ff.storage.encryption import encrypt_value
 from d1ff.storage.installation_repo import InstallationRepository
 
 logger = structlog.get_logger()
@@ -88,7 +90,10 @@ async def _create_session(
                 "user/installations", token=token, params={"per_page": 100, "page": page}
             )
             if installations_resp.status_code != 200:
-                logger.error("github_installations_api_failed", status=installations_resp.status_code)
+                logger.error(
+                    "github_installations_api_failed",
+                    status=installations_resp.status_code,
+                )
                 break
             installations_data = installations_resp.json()
             batch = installations_data.get("installations", [])
@@ -108,7 +113,11 @@ async def _create_session(
         "user_id": user_id,
     }
 
-    logger.info("user_logged_in", login=user_data["login"], installations_synced=len(installation_ids))
+    logger.info(
+        "user_logged_in",
+        login=user_data["login"],
+        installations_synced=len(installation_ids),
+    )
     return RedirectResponse(url="/repositories", status_code=302)
 
 

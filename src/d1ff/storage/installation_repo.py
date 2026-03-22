@@ -78,9 +78,7 @@ class InstallationRepository:
         )
         await self._db.commit()
 
-    async def update_installation_status(
-        self, installation_id: int, suspended: bool
-    ) -> None:
+    async def update_installation_status(self, installation_id: int, suspended: bool) -> None:
         """Update the suspended status of an installation."""
         now = datetime.datetime.now(datetime.UTC).isoformat()
         await self._db.execute(
@@ -139,7 +137,8 @@ class InstallationRepository:
         now = datetime.datetime.now(datetime.UTC).isoformat()
         cursor = await self._db.execute(
             """
-            INSERT INTO users (github_id, login, email, avatar_url, encrypted_token, created_at, updated_at)
+            INSERT INTO users (github_id, login, email, avatar_url,
+                encrypted_token, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(github_id) DO UPDATE SET
                 login           = excluded.login,
@@ -161,17 +160,13 @@ class InstallationRepository:
             row = await select_cursor.fetchone()
             return int(row["id"])
 
-    async def sync_user_installations(
-        self, user_id: int, installation_ids: list[int]
-    ) -> None:
+    async def sync_user_installations(self, user_id: int, installation_ids: list[int]) -> None:
         """Replace all user_installations for a user with the given installation IDs.
 
         Only links to installations that actually exist in the installations table.
         This is a full sync — removes stale links and adds new ones.
         """
-        await self._db.execute(
-            "DELETE FROM user_installations WHERE user_id = ?", (user_id,)
-        )
+        await self._db.execute("DELETE FROM user_installations WHERE user_id = ?", (user_id,))
         for inst_id in installation_ids:
             await self._db.execute(
                 """
@@ -272,11 +267,15 @@ async def upsert_installation(database_url: str, installation: Installation) -> 
 
 async def get_installation(database_url: str, installation_id: int) -> Installation | None:
     """Retrieve an installation by ID, or None if not found."""
-    async with get_connection(database_url) as conn, conn.execute(
-        "SELECT installation_id, account_login, account_type, suspended, created_at, updated_at "
-        "FROM installations WHERE installation_id = ?",
-        (installation_id,),
-    ) as cursor:
+    async with (
+        get_connection(database_url) as conn,
+        conn.execute(
+            "SELECT installation_id, account_login, account_type,"
+            " suspended, created_at, updated_at "
+            "FROM installations WHERE installation_id = ?",
+            (installation_id,),
+        ) as cursor,
+    ):
         row = await cursor.fetchone()
         if row is None:
             return None

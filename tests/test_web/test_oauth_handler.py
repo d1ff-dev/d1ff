@@ -62,9 +62,15 @@ async def test_login_redirects_unauthenticated_to_github(reset_oauth: None) -> N
 
 
 async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) -> None:
-    """GET /auth/github/callback with mocked token exchange creates user, syncs installations, redirects to /repositories."""
+    """GET /auth/github/callback creates user, syncs installations."""
     fake_token = {"access_token": "gho_fake", "token_type": "bearer"}
-    fake_user = {"login": "testuser", "id": 12345, "name": "Test User", "email": "test@example.com", "avatar_url": "https://avatars.example.com/u/12345"}
+    fake_user = {
+        "login": "testuser",
+        "id": 12345,
+        "name": "Test User",
+        "email": "test@example.com",
+        "avatar_url": "https://avatars.example.com/u/12345",
+    }
     fake_installations = {"installations": [{"id": 42}, {"id": 43}]}
 
     mock_user_resp = MagicMock()
@@ -89,12 +95,18 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
         patch("d1ff.web.router.oauth") as mock_oauth,
         patch("d1ff.web.router.encrypt_value", return_value="encrypted_token_value"),
         patch.object(
-            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            __import__(
+                "d1ff.storage.installation_repo",
+                fromlist=["InstallationRepository"],
+            ).InstallationRepository,
             "upsert_user",
             mock_upsert_user,
         ),
         patch.object(
-            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            __import__(
+                "d1ff.storage.installation_repo",
+                fromlist=["InstallationRepository"],
+            ).InstallationRepository,
             "sync_user_installations",
             mock_sync_installations,
         ),
@@ -104,9 +116,7 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
         mock_client.get = AsyncMock(side_effect=mock_get)
         mock_oauth.github = mock_client
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/auth/github/callback?code=fake_code&state=fake_state",
                 follow_redirects=False,
@@ -126,17 +136,15 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
 
 async def test_callback_error_redirects_to_login(reset_oauth: None) -> None:
     """GET /auth/github/callback should redirect to /login when both token exchange methods fail."""
-    with patch("d1ff.web.router.oauth") as mock_oauth, \
-         patch("d1ff.web.router._exchange_code_for_token", new=AsyncMock(return_value=None)):
+    with (
+        patch("d1ff.web.router.oauth") as mock_oauth,
+        patch("d1ff.web.router._exchange_code_for_token", new=AsyncMock(return_value=None)),
+    ):
         mock_client = MagicMock()
-        mock_client.authorize_access_token = AsyncMock(
-            side_effect=KeyError("OAuth state mismatch")
-        )
+        mock_client.authorize_access_token = AsyncMock(side_effect=KeyError("OAuth state mismatch"))
         mock_oauth.github = mock_client
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/auth/github/callback?code=fake_code&state=bad_state",
                 follow_redirects=False,
@@ -174,12 +182,18 @@ async def test_callback_empty_installations(reset_oauth: None) -> None:
         patch("d1ff.web.router.oauth") as mock_oauth,
         patch("d1ff.web.router.encrypt_value", return_value="enc_tok"),
         patch.object(
-            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            __import__(
+                "d1ff.storage.installation_repo",
+                fromlist=["InstallationRepository"],
+            ).InstallationRepository,
             "upsert_user",
             mock_upsert_user,
         ),
         patch.object(
-            __import__("d1ff.storage.installation_repo", fromlist=["InstallationRepository"]).InstallationRepository,
+            __import__(
+                "d1ff.storage.installation_repo",
+                fromlist=["InstallationRepository"],
+            ).InstallationRepository,
             "sync_user_installations",
             mock_sync_installations,
         ),
@@ -189,9 +203,7 @@ async def test_callback_empty_installations(reset_oauth: None) -> None:
         mock_client.get = AsyncMock(side_effect=mock_get)
         mock_oauth.github = mock_client
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/auth/github/callback?code=fake_code&state=fake_state",
                 follow_redirects=False,
@@ -210,5 +222,3 @@ async def test_logout_redirects_to_login() -> None:
 
     assert resp.status_code == 302
     assert resp.headers["location"] == "/login"
-
-

@@ -44,7 +44,8 @@ class GlobalSettingsRepository:
         await self._db.execute(
             """
             INSERT INTO user_global_settings
-                (user_id, provider, model, encrypted_api_key, custom_endpoint, created_at, updated_at)
+                (user_id, provider, model, encrypted_api_key,
+                 custom_endpoint, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (user_id) DO UPDATE SET
                 provider = excluded.provider,

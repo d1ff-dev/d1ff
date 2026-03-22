@@ -102,7 +102,9 @@ async def _init_tables(conn: aiosqlite.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS user_installations (
             user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            installation_id INTEGER NOT NULL REFERENCES installations(installation_id) ON DELETE CASCADE,
+            installation_id INTEGER NOT NULL
+                REFERENCES installations(installation_id)
+                ON DELETE CASCADE,
             PRIMARY KEY (user_id, installation_id)
         )
         """
