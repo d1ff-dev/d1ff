@@ -24,6 +24,11 @@ class AppSettings(BaseSettings):
 
     # Optional with defaults
     BASE_URL: str = "http://localhost:8000"  # Public base URL for OAuth callback
+    GITHUB_APP_SLUG: str = "d1ff-app"  # GitHub App slug (from App URL: github.com/apps/<slug>)
+
+    @property
+    def GITHUB_APP_INSTALL_URL(self) -> str:
+        return f"https://github.com/apps/{self.GITHUB_APP_SLUG}/installations/new"
     DATABASE_URL: str = "sqlite+aiosqlite:////data/d1ff.db"
     MAX_CONCURRENT_REVIEWS: int = 10
     # Hosted tier rate limiting (AD-7)

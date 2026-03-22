@@ -7,7 +7,6 @@ from httpx import ASGITransport, AsyncClient
 
 from d1ff.config import get_settings
 from d1ff.main import app
-from d1ff.web.router import GITHUB_APP_INSTALL_URL
 
 # Minimal env vars required by AppSettings
 REQUIRED_ENV = {
@@ -63,7 +62,7 @@ async def test_login_redirects_unauthenticated_to_github(reset_oauth: None) -> N
 
 
 async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) -> None:
-    """GET /auth/github/callback with mocked token exchange creates user, syncs installations, redirects to /settings."""
+    """GET /auth/github/callback with mocked token exchange creates user, syncs installations, redirects to /repositories."""
     fake_token = {"access_token": "gho_fake", "token_type": "bearer"}
     fake_user = {"login": "testuser", "id": 12345, "name": "Test User", "email": "test@example.com", "avatar_url": "https://avatars.example.com/u/12345"}
     fake_installations = {"installations": [{"id": 42}, {"id": 43}]}
@@ -114,7 +113,7 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
             )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/settings"
+    assert resp.headers["location"] == "/repositories"
     mock_upsert_user.assert_called_once_with(
         github_id=12345,
         login="testuser",
@@ -143,7 +142,7 @@ async def test_callback_error_redirects_to_github_app(reset_oauth: None) -> None
             )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
+    assert resp.headers["location"] == get_settings().GITHUB_APP_INSTALL_URL
 
 
 async def test_callback_empty_installations(reset_oauth: None) -> None:
@@ -198,17 +197,17 @@ async def test_callback_empty_installations(reset_oauth: None) -> None:
             )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/settings"
+    assert resp.headers["location"] == "/repositories"
     mock_upsert_user.assert_called_once()
     mock_sync_installations.assert_called_once_with(5, [])
 
 
-async def test_logout_redirects_to_github_app() -> None:
-    """GET /logout should clear the session and redirect to GitHub App install URL."""
+async def test_logout_redirects_to_login() -> None:
+    """GET /logout should clear the session and redirect to /login."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/logout", follow_redirects=False)
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
+    assert resp.headers["location"] == "/login"
 
 

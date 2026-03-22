@@ -19,6 +19,7 @@ from d1ff.observability import configure_logging
 from d1ff.observability.router import router as observability_router
 from d1ff.storage import init_db
 from d1ff.web import api_router, web_router
+from d1ff.web.repo_cache import RepoCache
 from d1ff.webhook import webhook_router
 
 logger = structlog.get_logger()
@@ -39,6 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     logger.info("github_app_client_initialized", app_id=settings.GITHUB_APP_ID)
 
+    app.state.repo_cache = RepoCache(ttl_seconds=300)
+
     yield
     logger.info("d1ff shutting down")
 
@@ -47,7 +50,14 @@ app = FastAPI(title="d1ff", version="0.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 _session_secret = os.environ.get("SESSION_SECRET_KEY", "dev-placeholder-not-for-production")
-app.add_middleware(SessionMiddleware, secret_key=_session_secret, max_age=30 * 24 * 3600)
+_base_url = os.environ.get("BASE_URL", "http://localhost:8000")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_session_secret,
+    max_age=30 * 24 * 3600,
+    https_only=_base_url.startswith("https://"),
+    same_site="lax",
+)
 
 # Router registration order matters: specific routes before SPA fallback
 app.include_router(observability_router)

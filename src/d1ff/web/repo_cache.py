@@ -14,7 +14,7 @@ class RepoCache:
         if entry is None:
             return None
         timestamp, repos = entry
-        if time.monotonic() - timestamp > self._ttl:
+        if time.monotonic() - timestamp >= self._ttl:
             del self._store[user_id]
             return None
         return repos
