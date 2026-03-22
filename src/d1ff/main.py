@@ -47,7 +47,14 @@ app = FastAPI(title="d1ff", version="0.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 _session_secret = os.environ.get("SESSION_SECRET_KEY", "dev-placeholder-not-for-production")
-app.add_middleware(SessionMiddleware, secret_key=_session_secret, max_age=30 * 24 * 3600)
+_base_url = os.environ.get("BASE_URL", "http://localhost:8000")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_session_secret,
+    max_age=30 * 24 * 3600,
+    https_only=_base_url.startswith("https://"),
+    same_site="lax",
+)
 
 # Router registration order matters: specific routes before SPA fallback
 app.include_router(observability_router)

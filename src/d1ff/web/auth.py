@@ -3,8 +3,7 @@
 from fastapi import Request
 from starlette.responses import RedirectResponse
 
-# Canonical location for the GitHub App install URL — imported by router.py too.
-GITHUB_APP_INSTALL_URL = "https://github.com/apps/d1ff-app/installations/new"
+from d1ff.config import get_settings
 
 
 async def require_login(request: Request) -> dict[str, object] | RedirectResponse:
@@ -15,5 +14,5 @@ async def require_login(request: Request) -> dict[str, object] | RedirectRespons
     """
     user: dict[str, object] | None = request.session.get("user")
     if not user:
-        return RedirectResponse(url=GITHUB_APP_INSTALL_URL, status_code=302)
+        return RedirectResponse(url=get_settings().GITHUB_APP_INSTALL_URL, status_code=302)
     return user

@@ -72,13 +72,30 @@ async def test_get_me_unauthenticated() -> None:
 
 
 async def test_get_me_authenticated(session_cookie: str) -> None:
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        client.cookies.set("session", session_cookie)
-        response = await client.get("/api/me")
+    with patch(
+        "d1ff.web.api.GlobalSettingsRepository.has_settings",
+        new=AsyncMock(return_value=False),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            client.cookies.set("session", session_cookie)
+            response = await client.get("/api/me")
     assert response.status_code == 200
     data = response.json()
     assert data["login"] == "testuser"
     assert data["github_id"] == 12345
+
+
+async def test_get_me_includes_has_global_settings(session_cookie: str) -> None:
+    with patch(
+        "d1ff.web.api.GlobalSettingsRepository.has_settings",
+        new=AsyncMock(return_value=True),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            client.cookies.set("session", session_cookie)
+            response = await client.get("/api/me")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["hasGlobalSettings"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -245,3 +262,115 @@ async def test_post_settings_clears_empty_endpoint(session_cookie: str) -> None:
 
     assert response.status_code == 200
     mock_upsert.assert_called_once_with(42, "openai", "gpt-4o", "sk-test", custom_endpoint=None)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/global-settings
+# ---------------------------------------------------------------------------
+
+async def test_get_global_settings_unauthenticated() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/global-settings")
+    assert response.status_code == 401
+
+
+async def test_get_global_settings_not_configured(session_cookie: str) -> None:
+    with patch(
+        "d1ff.web.api.GlobalSettingsRepository.get",
+        new=AsyncMock(return_value=None),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            client.cookies.set("session", session_cookie)
+            response = await client.get("/api/global-settings")
+    assert response.status_code == 404
+
+
+async def test_get_global_settings_returns_config(session_cookie: str) -> None:
+    fake_settings = {
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet-20241022",
+        "encrypted_api_key": "someencryptedvalue",
+        "custom_endpoint": None,
+    }
+    with patch(
+        "d1ff.web.api.GlobalSettingsRepository.get",
+        new=AsyncMock(return_value=fake_settings),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            client.cookies.set("session", session_cookie)
+            response = await client.get("/api/global-settings")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] == "anthropic"
+    assert data["model"] == "claude-3-5-sonnet-20241022"
+    assert data["has_key"] is True
+    assert data["custom_endpoint"] is None
+    assert "encrypted_api_key" not in data
+
+
+# ---------------------------------------------------------------------------
+# POST /api/global-settings
+# ---------------------------------------------------------------------------
+
+async def test_post_global_settings_unauthenticated() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/global-settings", json={
+            "provider": "openai", "model": "gpt-4o", "api_key": "sk-test",
+        })
+    assert response.status_code == 401
+
+
+async def test_post_global_settings_saves_config(session_cookie: str) -> None:
+    mock_upsert = AsyncMock()
+    with (
+        patch("d1ff.web.api.encrypt_value", return_value="encrypted-key"),
+        patch("d1ff.web.api.GlobalSettingsRepository.upsert", mock_upsert),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            client.cookies.set("session", session_cookie)
+            response = await client.post("/api/global-settings", json={
+                "provider": "openai",
+                "model": "gpt-4o",
+                "api_key": "sk-test",
+                "custom_endpoint": "",
+            })
+
+    assert response.status_code == 200
+    assert response.json() == {"saved": True}
+    mock_upsert.assert_called_once_with(
+        user_id=1,
+        provider="openai",
+        model="gpt-4o",
+        encrypted_api_key="encrypted-key",
+        custom_endpoint=None,
+    )
+
+
+async def test_post_global_settings_invalid_provider(session_cookie: str) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("session", session_cookie)
+        response = await client.post("/api/global-settings", json={
+            "provider": "badprovider", "model": "m", "api_key": "k",
+        })
+    assert response.status_code == 400
+
+
+async def test_post_global_settings_invalid_endpoint(session_cookie: str) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("session", session_cookie)
+        response = await client.post("/api/global-settings", json={
+            "provider": "openai", "model": "gpt-4o", "api_key": "sk-test",
+            "custom_endpoint": "not-a-url",
+        })
+    assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# GET /api/repositories
+# ---------------------------------------------------------------------------
+
+async def test_get_repositories_unauthenticated() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/repositories")
+    assert response.status_code == 401

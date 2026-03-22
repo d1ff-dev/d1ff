@@ -82,32 +82,114 @@ Even small improvements to existing prompts are welcome. You do not need a GitHu
    uv sync
    ```
 
-3. **Copy the environment template** and fill in the required values:
+3. **Create a personal dev GitHub App** (see [below](#creating-a-dev-github-app))
+
+4. **Copy the environment template** and fill in the values from your dev App:
    ```bash
    cp .env.example .env
-   # Edit .env with your GitHub App credentials and LLM API key
+   # Edit .env — see the dev App setup section for which values to use
    ```
-   See [docs/self-hosting.md](docs/self-hosting.md) for a complete setup guide.
 
-4. **Run the development server:**
+5. **Run the development server:**
    ```bash
    uv run fastapi dev src/d1ff/main.py
    ```
 
-5. **Run the test suite:**
+6. **Run the frontend dev server** (in a separate terminal):
+   ```bash
+   cd frontend && npm install && npm run dev
+   ```
+
+7. **Run the test suite:**
    ```bash
    uv run pytest
    ```
 
-6. **Run linting:**
+8. **Run linting:**
    ```bash
    uv run ruff check .
    ```
 
-7. **Run type checking:**
+9. **Run type checking:**
    ```bash
    uv run mypy src/
    ```
+
+### Creating a dev GitHub App
+
+Each developer needs their own GitHub App for local testing. The production App (`d1ff`) cannot be shared for development because GitHub Apps only support a single Webhook URL.
+
+#### Why a separate App?
+
+| Setting | Production App | Dev App |
+|---------|---------------|---------|
+| Callback URL | `https://app.d1ff.dev/auth/github/callback` | `http://localhost:8000/auth/github/callback` |
+| Webhook URL | `https://app.d1ff.dev/webhook/github` | `https://smee.io/YOUR_CHANNEL` |
+| Setup URL | `https://app.d1ff.dev/settings` | `http://localhost:8000/settings` |
+
+The **Callback URL** and **Setup URL** are browser redirects — `localhost` works fine. The **Webhook URL** is a server-to-server POST from GitHub — it cannot reach `localhost` directly, so we use [smee.io](https://smee.io) as a tunnel.
+
+#### Step-by-step
+
+1. **Create a smee channel** — go to https://smee.io and click "Start a new channel". Save the URL (e.g. `https://smee.io/abc123xyz`).
+
+2. **Create a GitHub App** — go to GitHub → Settings → Developer settings → GitHub Apps → New GitHub App:
+
+   | Field | Value |
+   |-------|-------|
+   | App name | `d1ff-dev-YOURNAME` |
+   | Homepage URL | `http://localhost:8000` |
+   | Callback URL | `http://localhost:8000/auth/github/callback` |
+   | Setup URL (optional) | `http://localhost:8000/settings` |
+   | Webhook URL | Your smee.io channel URL |
+   | Webhook secret | Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+
+3. **Set permissions** (Repository permissions):
+   - Pull requests: **Read & write**
+   - Issues: **Read & write**
+   - Metadata: **Read-only** (enabled by default)
+
+4. **Subscribe to events:**
+   - Pull request
+   - Issue comment
+
+5. **After creation**, on the App settings page:
+   - Note the **App ID**
+   - Generate a **private key** (downloads a `.pem` file)
+   - Under "OAuth", note the **Client ID** and generate a **Client secret**
+
+6. **Install the App** on a test repository (Install App tab → select repositories).
+
+7. **Fill in your `.env`:**
+   ```bash
+   GITHUB_APP_ID=<your dev app id>
+   GITHUB_PRIVATE_KEY="<contents of the .pem file>"
+   GITHUB_WEBHOOK_SECRET=<the secret you generated>
+   GITHUB_CLIENT_ID=<oauth client id>
+   GITHUB_CLIENT_SECRET=<oauth client secret>
+   ENCRYPTION_KEY=<generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
+   SESSION_SECRET_KEY=<any random string>
+   DATABASE_URL=sqlite+aiosqlite:///./d1ff-dev.db
+   ```
+
+#### Running locally with webhooks
+
+```bash
+# Terminal 1: smee proxy (install once: npm install -g smee-client)
+smee -u https://smee.io/YOUR_CHANNEL -t http://localhost:8000/webhook/github
+
+# Terminal 2: backend
+uv run fastapi dev src/d1ff/main.py
+
+# Terminal 3: frontend
+cd frontend && npm run dev
+```
+
+Open `http://localhost:5173`, log in with GitHub, then create a PR in your test repository — the webhook will arrive via smee and d1ff will process it.
+
+#### What works without webhooks
+
+If you only need to test the UI (OAuth, settings page, API endpoints), you can skip smee entirely. Just run the backend and frontend — OAuth login works because it is a browser redirect, not a server-to-server call.
 
 ### PR checklist
 
