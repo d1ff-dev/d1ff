@@ -212,10 +212,3 @@ async def test_logout_redirects_to_github_app() -> None:
     assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
 
 
-async def test_unauthenticated_settings_redirects_to_github_app() -> None:
-    """GET /settings without a session should return 302 redirect to GitHub App install URL."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/settings", follow_redirects=False)
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL

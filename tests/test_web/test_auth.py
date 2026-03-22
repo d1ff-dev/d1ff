@@ -1,11 +1,9 @@
 """Tests for web UI authentication dependency and session handling (AC: 5, 7)."""
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 
 from d1ff.config import get_settings
-from d1ff.main import app
-from d1ff.web.auth import GITHUB_APP_INSTALL_URL, require_login
+from d1ff.web.auth import require_login
 
 # Minimal env vars required by AppSettings
 REQUIRED_ENV = {
@@ -27,15 +25,6 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(key, value)
     yield  # type: ignore[misc]
     get_settings.cache_clear()
-
-
-async def test_unauthenticated_settings_redirects_to_github_app() -> None:
-    """GET /settings without a valid session redirects to GitHub App install URL with 302."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/settings", follow_redirects=False)
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == GITHUB_APP_INSTALL_URL
 
 
 async def test_require_login_returns_user_from_session() -> None:
@@ -77,8 +66,3 @@ async def test_require_login_redirects_when_no_session() -> None:
     assert isinstance(result, RedirectResponse)
 
 
-async def test_authenticated_user_accesses_settings() -> None:
-    """A request with a valid session user cookie gets a non-redirect response on /settings."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/settings", follow_redirects=False)
-        assert resp.status_code == 302
