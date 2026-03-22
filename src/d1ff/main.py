@@ -15,7 +15,7 @@ from d1ff.middleware import limiter
 from d1ff.observability import configure_logging
 from d1ff.observability.router import router as observability_router
 from d1ff.storage import init_db
-from d1ff.web import web_router
+from d1ff.web import api_router, web_router
 from d1ff.webhook import webhook_router
 
 logger = structlog.get_logger()
@@ -50,6 +50,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 _session_secret = os.environ.get("SESSION_SECRET_KEY", "dev-placeholder-not-for-production")
 app.add_middleware(SessionMiddleware, secret_key=_session_secret)
 app.include_router(observability_router)
+app.include_router(api_router)
 app.include_router(webhook_router)
 app.include_router(web_router)
 

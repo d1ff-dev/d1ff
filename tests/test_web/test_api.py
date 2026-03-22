@@ -54,6 +54,13 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
     get_settings.cache_clear()
 
 
+@pytest.fixture
+def session_cookie() -> str:
+    # Use the actual session secret the middleware was created with at import time.
+    from d1ff.main import _session_secret
+    return make_session_cookie(FAKE_USER, _session_secret)
+
+
 # ---------------------------------------------------------------------------
 # GET /api/me
 # ---------------------------------------------------------------------------
@@ -64,10 +71,9 @@ async def test_get_me_unauthenticated() -> None:
     assert response.status_code == 401
 
 
-async def test_get_me_authenticated() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_get_me_authenticated(session_cookie: str) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        client.cookies.set("session", cookie)
+        client.cookies.set("session", session_cookie)
         response = await client.get("/api/me")
     assert response.status_code == 200
     data = response.json()
@@ -85,8 +91,7 @@ async def test_get_installations_unauthenticated() -> None:
     assert response.status_code == 401
 
 
-async def test_get_installations_returns_list() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_get_installations_returns_list(session_cookie: str) -> None:
     fake_config = {
         "provider": "openai",
         "model": "gpt-4o",
@@ -104,7 +109,7 @@ async def test_get_installations_returns_list() -> None:
         ),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.get("/api/installations")
 
     assert response.status_code == 200
@@ -130,8 +135,7 @@ async def test_post_settings_unauthenticated() -> None:
     assert response.status_code == 401
 
 
-async def test_post_settings_saves_config() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_post_settings_saves_config(session_cookie: str) -> None:
     mock_upsert = AsyncMock()
     with (
         patch(
@@ -141,7 +145,7 @@ async def test_post_settings_saves_config() -> None:
         patch("d1ff.web.api.upsert_api_key_for_installation", mock_upsert),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.post("/api/settings", json={
                 "installation_id": 42,
                 "provider": "openai",
@@ -155,14 +159,13 @@ async def test_post_settings_saves_config() -> None:
     mock_upsert.assert_called_once_with(42, "openai", "gpt-4o", "sk-test", custom_endpoint=None)
 
 
-async def test_post_settings_invalid_provider() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_post_settings_invalid_provider(session_cookie: str) -> None:
     with patch(
         "d1ff.web.api.InstallationRepository.list_installations_for_user",
         new=AsyncMock(return_value=[FAKE_INSTALLATION]),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.post("/api/settings", json={
                 "installation_id": 42, "provider": "badprovider", "model": "m",
                 "api_key": "k", "custom_endpoint": "",
@@ -170,14 +173,13 @@ async def test_post_settings_invalid_provider() -> None:
     assert response.status_code == 400
 
 
-async def test_post_settings_unowned_installation() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_post_settings_unowned_installation(session_cookie: str) -> None:
     with patch(
         "d1ff.web.api.InstallationRepository.list_installations_for_user",
         new=AsyncMock(return_value=[FAKE_INSTALLATION]),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.post("/api/settings", json={
                 "installation_id": 999,  # not owned
                 "provider": "openai", "model": "gpt-4o",
@@ -186,14 +188,13 @@ async def test_post_settings_unowned_installation() -> None:
     assert response.status_code == 403
 
 
-async def test_post_settings_invalid_endpoint() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_post_settings_invalid_endpoint(session_cookie: str) -> None:
     with patch(
         "d1ff.web.api.InstallationRepository.list_installations_for_user",
         new=AsyncMock(return_value=[FAKE_INSTALLATION]),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.post("/api/settings", json={
                 "installation_id": 42, "provider": "openai", "model": "gpt-4o",
                 "api_key": "sk-test", "custom_endpoint": "not-a-url",
@@ -201,8 +202,7 @@ async def test_post_settings_invalid_endpoint() -> None:
     assert response.status_code == 400
 
 
-async def test_post_settings_saves_custom_endpoint() -> None:
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
+async def test_post_settings_saves_custom_endpoint(session_cookie: str) -> None:
     mock_upsert = AsyncMock()
     with (
         patch(
@@ -212,7 +212,7 @@ async def test_post_settings_saves_custom_endpoint() -> None:
         patch("d1ff.web.api.upsert_api_key_for_installation", mock_upsert),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.post("/api/settings", json={
                 "installation_id": 42, "provider": "openai", "model": "gpt-4o",
                 "api_key": "sk-test",
@@ -226,9 +226,8 @@ async def test_post_settings_saves_custom_endpoint() -> None:
     )
 
 
-async def test_post_settings_clears_empty_endpoint() -> None:
+async def test_post_settings_clears_empty_endpoint(session_cookie: str) -> None:
     """Empty string custom_endpoint is normalized to None."""
-    cookie = make_session_cookie(FAKE_USER, REQUIRED_ENV["SESSION_SECRET_KEY"])
     mock_upsert = AsyncMock()
     with (
         patch(
@@ -238,7 +237,7 @@ async def test_post_settings_clears_empty_endpoint() -> None:
         patch("d1ff.web.api.upsert_api_key_for_installation", mock_upsert),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.cookies.set("session", cookie)
+            client.cookies.set("session", session_cookie)
             response = await client.post("/api/settings", json={
                 "installation_id": 42, "provider": "openai", "model": "gpt-4o",
                 "api_key": "sk-test", "custom_endpoint": "   ",
