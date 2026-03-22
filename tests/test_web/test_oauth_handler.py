@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from d1ff.config import get_settings
 from d1ff.main import app
+from d1ff.storage.database import get_db_connection
 
 # Minimal env vars required by AppSettings
 REQUIRED_ENV = {
@@ -28,6 +29,15 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(key, value)
     yield  # type: ignore[misc]
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def override_db() -> None:  # type: ignore[misc]
+    """Override the database dependency so tests don't need a real SQLite file."""
+    mock_conn = MagicMock()
+    app.dependency_overrides[get_db_connection] = lambda: mock_conn
+    yield
+    app.dependency_overrides.pop(get_db_connection, None)
 
 
 @pytest.fixture
