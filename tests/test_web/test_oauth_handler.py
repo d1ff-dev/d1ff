@@ -124,9 +124,10 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
     mock_sync_installations.assert_called_once_with(1, [42, 43])
 
 
-async def test_callback_error_redirects_to_github_app(reset_oauth: None) -> None:
-    """GET /auth/github/callback should redirect to GitHub App install URL when token exchange fails."""
-    with patch("d1ff.web.router.oauth") as mock_oauth:
+async def test_callback_error_redirects_to_login(reset_oauth: None) -> None:
+    """GET /auth/github/callback should redirect to /login when both token exchange methods fail."""
+    with patch("d1ff.web.router.oauth") as mock_oauth, \
+         patch("d1ff.web.router._exchange_code_for_token", new=AsyncMock(return_value=None)):
         mock_client = MagicMock()
         mock_client.authorize_access_token = AsyncMock(
             side_effect=KeyError("OAuth state mismatch")
@@ -142,7 +143,7 @@ async def test_callback_error_redirects_to_github_app(reset_oauth: None) -> None
             )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == get_settings().GITHUB_APP_INSTALL_URL
+    assert resp.headers["location"] == "/login"
 
 
 async def test_callback_empty_installations(reset_oauth: None) -> None:
