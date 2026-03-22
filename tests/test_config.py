@@ -18,9 +18,10 @@ VALID_ENV = {
 
 
 @pytest.fixture(autouse=True)
-def clear_settings_cache() -> None:
-    """Clear the lru_cache before every test to avoid state leakage."""
+def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear the lru_cache and ignore .env file to avoid state leakage."""
     get_settings.cache_clear()
+    monkeypatch.setattr(AppSettings, "model_config", {**AppSettings.model_config, "env_file": None})
     yield  # type: ignore[misc]
     get_settings.cache_clear()
 
