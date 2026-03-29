@@ -69,8 +69,8 @@ jobs:
           password: ${{ secrets.DROPLET_PASSWORD }}
           script: |
             cd /opt/d1ff
-            docker compose pull d1ff
-            docker compose up -d d1ff
+            docker compose -f docker-compose.prod.yml pull d1ff
+            docker compose -f docker-compose.prod.yml up -d d1ff
 
             # Health check — wait up to 60s
             for i in $(seq 1 12); do

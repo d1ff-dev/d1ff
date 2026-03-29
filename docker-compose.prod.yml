@@ -1,0 +1,61 @@
+# Production docker-compose for DigitalOcean Droplet
+#
+# Setup:
+#   1. Copy .env.example to .env and fill in values
+#   2. Set DOMAIN in .env (e.g. DOMAIN=d1ff.example.com)
+#   3. Point DNS A record to Droplet IP
+#   4. docker compose -f docker-compose.prod.yml up -d
+#
+# Caddy auto-provisions HTTPS via Let's Encrypt.
+
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      d1ff:
+        condition: service_healthy
+    restart: unless-stopped
+
+  d1ff:
+    image: ghcr.io/d1ff-dev/d1ff:main
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: d1ff
+      POSTGRES_USER: d1ff
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-d1ff_local}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U d1ff"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
