@@ -14,6 +14,7 @@ repos:
         types: [python]
         pass_filenames: false
         args: [src/]
+        stages: [pre-push]
       - id: pytest
         name: pytest
         entry: uv run pytest
