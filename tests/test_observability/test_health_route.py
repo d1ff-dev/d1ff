@@ -32,13 +32,13 @@ def override_settings() -> pytest.FixtureRequest:
 
 def _ok_response() -> tuple[HealthResponse, int]:
     ok = SubsystemHealth(status="ok")
-    return HealthResponse(service=ok, sqlite=ok, llm_provider=ok, github_api=ok), 200
+    return HealthResponse(service=ok, database=ok, llm_provider=ok, github_api=ok), 200
 
 
 def _error_response() -> tuple[HealthResponse, int]:
     ok = SubsystemHealth(status="ok")
     error = SubsystemHealth(status="error", detail="unreachable")
-    return HealthResponse(service=ok, sqlite=ok, llm_provider=error, github_api=ok), 503
+    return HealthResponse(service=ok, database=ok, llm_provider=error, github_api=ok), 503
 
 
 async def test_health_returns_200_when_healthy(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,6 +72,6 @@ async def test_health_response_schema(monkeypatch: pytest.MonkeyPatch) -> None:
         resp = await client.get("/health")
     body = resp.json()
     assert "service" in body
-    assert "sqlite" in body
+    assert "database" in body
     assert "llm_provider" in body
     assert "github_api" in body

@@ -1,6 +1,5 @@
 """Web UI OAuth routes for the d1ff application."""
 
-import aiosqlite
 import httpx
 import structlog
 from authlib.integrations.base_client.errors import (  # type: ignore[import-untyped]
@@ -8,6 +7,7 @@ from authlib.integrations.base_client.errors import (  # type: ignore[import-unt
 )
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette.responses import Response
 
 from d1ff.config import get_settings
@@ -75,7 +75,7 @@ def _determine_redirect(
 async def _create_session(
     request: Request,
     access_token: str,
-    db: aiosqlite.Connection,
+    db: AsyncConnection,
 ) -> Response:
     """Fetch user profile, sync installations, create session, redirect to app."""
     token = {"access_token": access_token, "token_type": "bearer"}
@@ -159,7 +159,7 @@ async def _create_session(
 @router.get("/auth/github/callback", name="github_callback")
 async def github_callback(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> Response:
     """Handle GitHub OAuth callback — from both login flow and app installation flow."""
     # Try authlib flow first (normal login via /auth/github/login)

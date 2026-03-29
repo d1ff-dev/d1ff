@@ -17,7 +17,12 @@ from d1ff.github.oauth_handler import register_github_oauth
 from d1ff.middleware import limiter
 from d1ff.observability import configure_logging
 from d1ff.observability.router import router as observability_router
-from d1ff.storage import init_db
+from d1ff.storage.database import (
+    dispose_engine,
+    ensure_database_exists,
+    init_engine,
+    run_alembic_upgrade,
+)
 from d1ff.web import api_router, web_router
 from d1ff.webhook import webhook_router
 
@@ -30,7 +35,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     configure_logging(settings.LOG_LEVEL)
     register_github_oauth()
     logger.info("d1ff starting", version="0.1.0", host=settings.HOST, port=settings.PORT)
-    await init_db(settings.DATABASE_URL)
+    await ensure_database_exists(settings.DATABASE_URL)
+    run_alembic_upgrade(settings.DATABASE_URL)
+    init_engine(settings.DATABASE_URL)
     logger.info("storage initialized", database_url=settings.DATABASE_URL)
 
     app.state.github_client = GitHubAppClient(
@@ -40,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("github_app_client_initialized", app_id=settings.GITHUB_APP_ID)
 
     yield
+    await dispose_engine()
     logger.info("d1ff shutting down")
 
 
