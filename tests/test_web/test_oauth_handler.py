@@ -100,6 +100,7 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
 
     mock_upsert_user = AsyncMock(return_value=1)
     mock_sync_installations = AsyncMock()
+    mock_list_installations = AsyncMock(return_value=[])
 
     with (
         patch("d1ff.web.router.oauth") as mock_oauth,
@@ -119,6 +120,14 @@ async def test_callback_creates_user_and_syncs_installations(reset_oauth: None) 
             ).InstallationRepository,
             "sync_user_installations",
             mock_sync_installations,
+        ),
+        patch.object(
+            __import__(
+                "d1ff.storage.installation_repo",
+                fromlist=["InstallationRepository"],
+            ).InstallationRepository,
+            "list_installations_for_user",
+            mock_list_installations,
         ),
     ):
         mock_client = MagicMock()
@@ -187,6 +196,7 @@ async def test_callback_empty_installations(reset_oauth: None) -> None:
 
     mock_upsert_user = AsyncMock(return_value=5)
     mock_sync_installations = AsyncMock()
+    mock_list_installations = AsyncMock(return_value=[])
 
     with (
         patch("d1ff.web.router.oauth") as mock_oauth,
@@ -207,6 +217,14 @@ async def test_callback_empty_installations(reset_oauth: None) -> None:
             "sync_user_installations",
             mock_sync_installations,
         ),
+        patch.object(
+            __import__(
+                "d1ff.storage.installation_repo",
+                fromlist=["InstallationRepository"],
+            ).InstallationRepository,
+            "list_installations_for_user",
+            mock_list_installations,
+        ),
     ):
         mock_client = MagicMock()
         mock_client.authorize_access_token = AsyncMock(return_value=fake_token)
@@ -220,9 +238,8 @@ async def test_callback_empty_installations(reset_oauth: None) -> None:
             )
 
     assert resp.status_code == 302
-    assert resp.headers["location"] == "/repositories"
+    assert resp.headers["location"] == "/setup"
     mock_upsert_user.assert_called_once()
-    mock_sync_installations.assert_called_once_with(5, [])
 
 
 async def test_logout_redirects_to_login() -> None:

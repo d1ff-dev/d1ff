@@ -57,7 +57,7 @@ Traditional SaaS code review tools charge **per seat** — they profit when your
 
 ### Hosted (GitHub App)
 
-1. [Install the d1ff GitHub App](https://github.com/apps/d1ff) on your repository
+1. [Sign up at app.d1ff.dev](https://app.d1ff.dev) with your GitHub account
 2. Add your LLM API key in the d1ff dashboard
 3. Open a pull request — d1ff will post a review automatically
 

@@ -125,7 +125,7 @@ Each developer needs their own GitHub App for local testing. The production App 
 |---------|---------------|---------|
 | Callback URL | `https://app.d1ff.dev/auth/github/callback` | `http://localhost:8000/auth/github/callback` |
 | Webhook URL | `https://app.d1ff.dev/webhook/github` | `https://smee.io/YOUR_CHANNEL` |
-| Setup URL | `https://app.d1ff.dev/settings` | `http://localhost:8000/settings` |
+| Setup URL | `https://app.d1ff.dev/auth/github/callback` | `http://localhost:8000/auth/github/callback` |
 
 The **Callback URL** and **Setup URL** are browser redirects — `localhost` works fine. The **Webhook URL** is a server-to-server POST from GitHub — it cannot reach `localhost` directly, so we use [smee.io](https://smee.io) as a tunnel.
 
@@ -140,7 +140,7 @@ The **Callback URL** and **Setup URL** are browser redirects — `localhost` wor
    | App name | `d1ff-dev-YOURNAME` |
    | Homepage URL | `http://localhost:8000` |
    | Callback URL | `http://localhost:8000/auth/github/callback` |
-   | Setup URL (optional) | `http://localhost:8000/settings` |
+   | Setup URL (optional) | `http://localhost:8000/auth/github/callback` |
    | Webhook URL | Your smee.io channel URL |
    | Webhook secret | Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
 
@@ -153,14 +153,17 @@ The **Callback URL** and **Setup URL** are browser redirects — `localhost` wor
    - Pull request
    - Issue comment
 
-5. **After creation**, on the App settings page:
+5. **Enable OAuth during installation:**
+   - Check "Request user authorization (OAuth) during installation"
+
+6. **After creation**, on the App settings page:
    - Note the **App ID**
    - Generate a **private key** (downloads a `.pem` file)
    - Under "OAuth", note the **Client ID** and generate a **Client secret**
 
-6. **Install the App** on a test repository (Install App tab → select repositories).
+7. **Install the App** on a test repository (Install App tab → select repositories).
 
-7. **Fill in your `.env`:**
+8. **Fill in your `.env`:**
    ```bash
    GITHUB_APP_ID=<your dev app id>
    GITHUB_PRIVATE_KEY="<contents of the .pem file>"
