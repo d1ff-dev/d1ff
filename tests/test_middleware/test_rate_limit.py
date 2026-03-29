@@ -11,7 +11,12 @@ from httpx import ASGITransport, AsyncClient
 from d1ff.config import get_settings
 from d1ff.middleware import get_limiter, limiter
 from d1ff.middleware.rate_limit import _get_installation_id
-from d1ff.storage.database import get_db_connection, init_db
+from d1ff.storage.database import (
+    dispose_engine,
+    get_db_connection,
+    init_engine,
+    run_alembic_upgrade,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests — limiter module
@@ -83,19 +88,20 @@ def override_rate_limit_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def test_rate_limit_returns_429_when_exceeded(
     override_rate_limit_settings: None,
-    tmp_path: pytest.TempPathFactory,
+    postgres_url: str,
 ) -> None:
     """Third request in HOSTED_MODE with RATE_LIMIT_PER_MINUTE=2 must return 429."""
-    import aiosqlite
+    from sqlalchemy.ext.asyncio import AsyncConnection
 
     from d1ff.main import app
 
-    db_url = f"sqlite+aiosqlite:///{tmp_path}/test_rate_limit.db"
-    await init_db(db_url)
+    run_alembic_upgrade(postgres_url)
+    init_engine(postgres_url)
 
-    async def _get_db_override() -> aiosqlite.Connection:  # type: ignore[return]
-        async with aiosqlite.connect(f"{tmp_path}/test_rate_limit.db") as conn:
-            conn.row_factory = aiosqlite.Row
+    async def _get_db_override() -> AsyncConnection:  # type: ignore[return]
+        from d1ff.storage.database import get_engine
+
+        async with get_engine().connect() as conn:
             yield conn
 
     app.dependency_overrides[get_db_connection] = _get_db_override
@@ -123,3 +129,4 @@ async def test_rate_limit_returns_429_when_exceeded(
         assert resp3.status_code == 429, f"Expected 429, got {resp3.status_code}"
     finally:
         app.dependency_overrides.clear()
+        await dispose_engine()

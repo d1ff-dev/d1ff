@@ -5,13 +5,20 @@ import hmac
 import json
 from pathlib import Path
 
-import aiosqlite
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from d1ff.config import get_settings
 from d1ff.main import app
-from d1ff.storage.database import get_db_connection, init_db
+from d1ff.storage.database import (
+    dispose_engine,
+    get_db_connection,
+    get_engine,
+    init_engine,
+    run_alembic_upgrade,
+)
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "webhooks"
 
@@ -28,13 +35,13 @@ def _load_fixture(name: str) -> bytes:
 
 
 @pytest.fixture
-async def db_conn(tmp_path):  # type: ignore[no-untyped-def]
-    """In-memory aiosqlite connection with schema initialized."""
-    db_url = f"sqlite+aiosqlite:///{tmp_path}/test_router.db"
-    await init_db(db_url)
-    async with aiosqlite.connect(f"{tmp_path}/test_router.db") as conn:
-        conn.row_factory = aiosqlite.Row
+async def db_conn(postgres_url: str):  # type: ignore[no-untyped-def]
+    """AsyncConnection with schema initialized."""
+    run_alembic_upgrade(postgres_url)
+    init_engine(postgres_url)
+    async with get_engine().connect() as conn:
         yield conn
+    await dispose_engine()
 
 
 @pytest.fixture
@@ -56,7 +63,8 @@ def override_settings(monkeypatch):  # type: ignore[no-untyped-def]
 @pytest.fixture
 def test_client(override_settings, db_conn):  # type: ignore[no-untyped-def]
     """AsyncClient wired to the FastAPI app with DI overrides."""
-    async def _get_db_override() -> aiosqlite.Connection:  # type: ignore[return]
+
+    async def _get_db_override() -> AsyncConnection:  # type: ignore[return]
         yield db_conn
 
     app.dependency_overrides[get_db_connection] = _get_db_override
@@ -112,7 +120,7 @@ async def test_missing_signature_returns_401(test_client, db_conn) -> None:  # t
     assert resp.status_code == 401
 
 
-async def test_installation_event_stored(test_client, db_conn, tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_installation_event_stored(test_client, db_conn) -> None:  # type: ignore[no-untyped-def]
     """POST installation.created event → installation ID persisted in DB."""
     payload_bytes = _load_fixture("installation_created.json")
     sig = _make_sig(payload_bytes, WEBHOOK_SECRET)
@@ -131,10 +139,11 @@ async def test_installation_event_stored(test_client, db_conn, tmp_path) -> None
     assert resp.status_code == 202
 
     # Verify installation was persisted
-    async with db_conn.execute(
-        "SELECT installation_id FROM installations WHERE installation_id = ?", (42000001,)
-    ) as cursor:
-        row = await cursor.fetchone()
+    result = await db_conn.execute(
+        text("SELECT installation_id FROM installations WHERE installation_id = :iid"),
+        {"iid": 42000001},
+    )
+    row = result.fetchone()
     assert row is not None
     assert int(row[0]) == 42000001
 

@@ -2,10 +2,10 @@
 
 import json
 
-import aiosqlite
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from d1ff.config import AppSettings, get_settings
 from d1ff.middleware import limiter
@@ -31,7 +31,7 @@ def _webhook_rate_limit() -> str:
 @limiter.limit(_webhook_rate_limit)
 async def receive_webhook(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
     settings: AppSettings = Depends(get_settings),  # noqa: B008
 ) -> JSONResponse | dict[str, str]:
     """Receive and process a GitHub App webhook.

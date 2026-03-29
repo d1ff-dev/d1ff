@@ -29,7 +29,8 @@ class AppSettings(BaseSettings):
     @property
     def GITHUB_APP_INSTALL_URL(self) -> str:
         return f"https://github.com/apps/{self.GITHUB_APP_SLUG}/installations/new"
-    DATABASE_URL: str = "sqlite+aiosqlite:////data/d1ff.db"
+
+    DATABASE_URL: str = "postgresql+asyncpg://d1ff:d1ff_local@postgres:5432/d1ff"
     MAX_CONCURRENT_REVIEWS: int = 10
     # Hosted tier rate limiting (AD-7)
     HOSTED_MODE: bool = False  # When True, enables slowapi per-installation rate limiting

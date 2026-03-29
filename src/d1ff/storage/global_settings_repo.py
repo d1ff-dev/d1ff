@@ -1,21 +1,28 @@
-"""Repository for user global LLM settings."""
+"""Repository for user global LLM settings (PostgreSQL)."""
 
 from datetime import UTC, datetime
 
-import aiosqlite
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncConnection
+
+from d1ff.storage.schema import user_global_settings
 
 
 class GlobalSettingsRepository:
-    def __init__(self, db: aiosqlite.Connection) -> None:
+    def __init__(self, db: AsyncConnection) -> None:
         self._db = db
 
     async def get(self, user_id: int) -> dict[str, str | None] | None:
-        cursor = await self._db.execute(
-            "SELECT provider, model, encrypted_api_key, custom_endpoint "
-            "FROM user_global_settings WHERE user_id = ?",
-            (user_id,),
+        result = await self._db.execute(
+            select(
+                user_global_settings.c.provider,
+                user_global_settings.c.model,
+                user_global_settings.c.encrypted_api_key,
+                user_global_settings.c.custom_endpoint,
+            ).where(user_global_settings.c.user_id == user_id)
         )
-        row = await cursor.fetchone()
+        row = result.mappings().first()
         if not row:
             return None
         return {
@@ -26,11 +33,10 @@ class GlobalSettingsRepository:
         }
 
     async def has_settings(self, user_id: int) -> bool:
-        cursor = await self._db.execute(
-            "SELECT 1 FROM user_global_settings WHERE user_id = ?",
-            (user_id,),
+        result = await self._db.execute(
+            select(user_global_settings.c.user_id).where(user_global_settings.c.user_id == user_id)
         )
-        return await cursor.fetchone() is not None
+        return result.first() is not None
 
     async def upsert(
         self,
@@ -40,20 +46,28 @@ class GlobalSettingsRepository:
         encrypted_api_key: str,
         custom_endpoint: str | None,
     ) -> None:
-        now = datetime.now(UTC).isoformat()
-        await self._db.execute(
-            """
-            INSERT INTO user_global_settings
-                (user_id, provider, model, encrypted_api_key,
-                 custom_endpoint, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (user_id) DO UPDATE SET
-                provider = excluded.provider,
-                model = excluded.model,
-                encrypted_api_key = excluded.encrypted_api_key,
-                custom_endpoint = excluded.custom_endpoint,
-                updated_at = excluded.updated_at
-            """,
-            (user_id, provider, model, encrypted_api_key, custom_endpoint, now, now),
+        now = datetime.now(UTC)
+        stmt = (
+            insert(user_global_settings)
+            .values(
+                user_id=user_id,
+                provider=provider,
+                model=model,
+                encrypted_api_key=encrypted_api_key,
+                custom_endpoint=custom_endpoint,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "provider": provider,
+                    "model": model,
+                    "encrypted_api_key": encrypted_api_key,
+                    "custom_endpoint": custom_endpoint,
+                    "updated_at": now,
+                },
+            )
         )
+        await self._db.execute(stmt)
         await self._db.commit()

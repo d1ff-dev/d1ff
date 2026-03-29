@@ -44,7 +44,10 @@ COPY --from=backend-builder /app/prompts /app/prompts
 # Copy compiled React SPA from frontend-builder
 COPY --from=frontend-builder /frontend/dist /app/static
 
-# Create volume mount point for SQLite
+# Copy Alembic config and migrations
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+
 RUN mkdir -p /data
 
 ENV PORT=8000

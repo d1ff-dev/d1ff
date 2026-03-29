@@ -2,13 +2,14 @@
 
 import datetime
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from d1ff.config import get_settings
 from d1ff.main import app
+from d1ff.storage.database import get_db_connection
 from d1ff.storage.models import Installation
 
 REQUIRED_ENV = {
@@ -50,7 +51,18 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
     get_settings.cache_clear()
     for key, value in REQUIRED_ENV.items():
         monkeypatch.setenv(key, value)
+
+    # Override get_db_connection so FastAPI endpoints don't need a real engine.
+    # Repository methods are patched per-test with AsyncMock, so the db object
+    # itself is never used directly.
+    mock_conn = MagicMock()
+
+    async def _mock_db_connection():
+        yield mock_conn
+
+    app.dependency_overrides[get_db_connection] = _mock_db_connection
     yield
+    app.dependency_overrides.pop(get_db_connection, None)
     get_settings.cache_clear()
 
 
@@ -58,12 +70,14 @@ def setup_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
 def session_cookie() -> str:
     # Use the actual session secret the middleware was created with at import time.
     from d1ff.main import _session_secret
+
     return make_session_cookie(FAKE_USER, _session_secret)
 
 
 # ---------------------------------------------------------------------------
 # GET /api/me
 # ---------------------------------------------------------------------------
+
 
 async def test_get_me_unauthenticated() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -101,6 +115,7 @@ async def test_get_me_includes_has_global_settings(session_cookie: str) -> None:
 # ---------------------------------------------------------------------------
 # GET /api/installations
 # ---------------------------------------------------------------------------
+
 
 async def test_get_installations_unauthenticated() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -143,12 +158,19 @@ async def test_get_installations_returns_list(session_cookie: str) -> None:
 # POST /api/settings
 # ---------------------------------------------------------------------------
 
+
 async def test_post_settings_unauthenticated() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post("/api/settings", json={
-            "installation_id": 42, "provider": "openai", "model": "gpt-4o",
-            "api_key": "sk-test", "custom_endpoint": "",
-        })
+        response = await client.post(
+            "/api/settings",
+            json={
+                "installation_id": 42,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "api_key": "sk-test",
+                "custom_endpoint": "",
+            },
+        )
     assert response.status_code == 401
 
 
@@ -163,13 +185,16 @@ async def test_post_settings_saves_config(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/settings", json={
-                "installation_id": 42,
-                "provider": "openai",
-                "model": "gpt-4o",
-                "api_key": "sk-test",
-                "custom_endpoint": "",
-            })
+            response = await client.post(
+                "/api/settings",
+                json={
+                    "installation_id": 42,
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "api_key": "sk-test",
+                    "custom_endpoint": "",
+                },
+            )
 
     assert response.status_code == 200
     assert response.json() == {"saved": True}
@@ -183,10 +208,16 @@ async def test_post_settings_invalid_provider(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/settings", json={
-                "installation_id": 42, "provider": "badprovider", "model": "m",
-                "api_key": "k", "custom_endpoint": "",
-            })
+            response = await client.post(
+                "/api/settings",
+                json={
+                    "installation_id": 42,
+                    "provider": "badprovider",
+                    "model": "m",
+                    "api_key": "k",
+                    "custom_endpoint": "",
+                },
+            )
     assert response.status_code == 400
 
 
@@ -197,11 +228,16 @@ async def test_post_settings_unowned_installation(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/settings", json={
-                "installation_id": 999,  # not owned
-                "provider": "openai", "model": "gpt-4o",
-                "api_key": "sk-test", "custom_endpoint": "",
-            })
+            response = await client.post(
+                "/api/settings",
+                json={
+                    "installation_id": 999,  # not owned
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "api_key": "sk-test",
+                    "custom_endpoint": "",
+                },
+            )
     assert response.status_code == 403
 
 
@@ -212,10 +248,16 @@ async def test_post_settings_invalid_endpoint(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/settings", json={
-                "installation_id": 42, "provider": "openai", "model": "gpt-4o",
-                "api_key": "sk-test", "custom_endpoint": "not-a-url",
-            })
+            response = await client.post(
+                "/api/settings",
+                json={
+                    "installation_id": 42,
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "api_key": "sk-test",
+                    "custom_endpoint": "not-a-url",
+                },
+            )
     assert response.status_code == 400
 
 
@@ -230,15 +272,23 @@ async def test_post_settings_saves_custom_endpoint(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/settings", json={
-                "installation_id": 42, "provider": "openai", "model": "gpt-4o",
-                "api_key": "sk-test",
-                "custom_endpoint": "https://my-azure.openai.azure.com",
-            })
+            response = await client.post(
+                "/api/settings",
+                json={
+                    "installation_id": 42,
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "api_key": "sk-test",
+                    "custom_endpoint": "https://my-azure.openai.azure.com",
+                },
+            )
 
     assert response.status_code == 200
     mock_upsert.assert_called_once_with(
-        42, "openai", "gpt-4o", "sk-test",
+        42,
+        "openai",
+        "gpt-4o",
+        "sk-test",
         custom_endpoint="https://my-azure.openai.azure.com",
     )
 
@@ -255,10 +305,16 @@ async def test_post_settings_clears_empty_endpoint(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/settings", json={
-                "installation_id": 42, "provider": "openai", "model": "gpt-4o",
-                "api_key": "sk-test", "custom_endpoint": "   ",
-            })
+            response = await client.post(
+                "/api/settings",
+                json={
+                    "installation_id": 42,
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "api_key": "sk-test",
+                    "custom_endpoint": "   ",
+                },
+            )
 
     assert response.status_code == 200
     mock_upsert.assert_called_once_with(42, "openai", "gpt-4o", "sk-test", custom_endpoint=None)
@@ -267,6 +323,7 @@ async def test_post_settings_clears_empty_endpoint(session_cookie: str) -> None:
 # ---------------------------------------------------------------------------
 # GET /api/global-settings
 # ---------------------------------------------------------------------------
+
 
 async def test_get_global_settings_unauthenticated() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -313,11 +370,17 @@ async def test_get_global_settings_returns_config(session_cookie: str) -> None:
 # POST /api/global-settings
 # ---------------------------------------------------------------------------
 
+
 async def test_post_global_settings_unauthenticated() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post("/api/global-settings", json={
-            "provider": "openai", "model": "gpt-4o", "api_key": "sk-test",
-        })
+        response = await client.post(
+            "/api/global-settings",
+            json={
+                "provider": "openai",
+                "model": "gpt-4o",
+                "api_key": "sk-test",
+            },
+        )
     assert response.status_code == 401
 
 
@@ -329,12 +392,15 @@ async def test_post_global_settings_saves_config(session_cookie: str) -> None:
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies.set("session", session_cookie)
-            response = await client.post("/api/global-settings", json={
-                "provider": "openai",
-                "model": "gpt-4o",
-                "api_key": "sk-test",
-                "custom_endpoint": "",
-            })
+            response = await client.post(
+                "/api/global-settings",
+                json={
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "api_key": "sk-test",
+                    "custom_endpoint": "",
+                },
+            )
 
     assert response.status_code == 200
     assert response.json() == {"saved": True}
@@ -350,25 +416,36 @@ async def test_post_global_settings_saves_config(session_cookie: str) -> None:
 async def test_post_global_settings_invalid_provider(session_cookie: str) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("session", session_cookie)
-        response = await client.post("/api/global-settings", json={
-            "provider": "badprovider", "model": "m", "api_key": "k",
-        })
+        response = await client.post(
+            "/api/global-settings",
+            json={
+                "provider": "badprovider",
+                "model": "m",
+                "api_key": "k",
+            },
+        )
     assert response.status_code == 400
 
 
 async def test_post_global_settings_invalid_endpoint(session_cookie: str) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("session", session_cookie)
-        response = await client.post("/api/global-settings", json={
-            "provider": "openai", "model": "gpt-4o", "api_key": "sk-test",
-            "custom_endpoint": "not-a-url",
-        })
+        response = await client.post(
+            "/api/global-settings",
+            json={
+                "provider": "openai",
+                "model": "gpt-4o",
+                "api_key": "sk-test",
+                "custom_endpoint": "not-a-url",
+            },
+        )
     assert response.status_code == 400
 
 
 # ---------------------------------------------------------------------------
 # GET /api/repositories
 # ---------------------------------------------------------------------------
+
 
 async def test_get_repositories_unauthenticated() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

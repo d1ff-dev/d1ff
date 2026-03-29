@@ -3,34 +3,35 @@
 # 1. Build the image:
 #    docker build -t d1ff .
 #
-# 2. Run the container (requires a valid .env file with required vars set):
-#    docker run -v d1ff-data:/data -p 8000:8000 --env-file .env d1ff
-#
-#    For Docker-infra-only smoke testing (stub values to bypass fail-fast):
-#    docker run -v d1ff-data:/data -p 8000:8000 \
-#      -e GITHUB_APP_ID=1 \
-#      -e GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xHn/ygWep4PAtEsHAcMCRCTxHFWkWgvMbOar\n-----END RSA PRIVATE KEY-----" \
-#      -e GITHUB_WEBHOOK_SECRET=test \
-#      -e ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") \
-#      d1ff
+# 2. Run the stack:
+#    docker compose up -d
 #
 # 3. Verify health endpoint responds:
 #    curl http://localhost:8000/health
 #    Expected: JSON with subsystem statuses, HTTP 200
-#
-# 4. Verify Docker healthcheck status (after start_period of 15s):
-#    docker inspect <container_id> --format='{{.State.Health.Status}}'
-#    Expected: "healthy"
 
 services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: d1ff
+      POSTGRES_USER: d1ff
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-d1ff_local}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U d1ff"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   d1ff:
     build: .
-    # Or use a pre-built image:
-    # image: ghcr.io/d1ff-dev/d1ff:latest
     ports:
       - "8000:8000"
-    volumes:
-      - d1ff-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
     restart: unless-stopped
@@ -42,4 +43,4 @@ services:
       start_period: 15s
 
 volumes:
-  d1ff-data:
+  postgres-data:

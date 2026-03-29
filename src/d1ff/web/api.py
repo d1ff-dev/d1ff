@@ -1,9 +1,9 @@
 """JSON API endpoints for the React SPA."""
 
-import aiosqlite
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from d1ff.config import get_settings
 from d1ff.github.oauth_handler import oauth
@@ -50,7 +50,7 @@ def _sanitize_config(cfg: dict[str, str | None] | None) -> dict[str, str | bool 
 @router.get("/me")
 async def get_me(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> dict[str, object]:
     """Return current authenticated user from session."""
     user = _get_session_user(request)
@@ -62,7 +62,7 @@ async def get_me(
 @router.get("/installations")
 async def get_installations(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> list[dict[str, object]]:
     """Return installations and their configs for the authenticated user."""
     user = _get_session_user(request)
@@ -102,7 +102,7 @@ class SettingsRequest(BaseModel):
 @router.get("/global-settings")
 async def get_global_settings(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> dict[str, str | bool | None]:
     user = _get_session_user(request)
     repo = GlobalSettingsRepository(db)
@@ -121,7 +121,7 @@ async def get_global_settings(
 async def update_global_settings(
     request: Request,
     body: GlobalSettingsRequest,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> dict[str, bool]:
     user = _get_session_user(request)
     if body.provider not in ALLOWED_PROVIDERS:
@@ -149,7 +149,7 @@ async def update_global_settings(
 async def update_settings(
     request: Request,
     body: SettingsRequest,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> dict[str, bool]:
     """Save API key and provider/model config for an installation."""
     user = _get_session_user(request)
@@ -180,7 +180,7 @@ async def update_settings(
 @router.get("/repositories")
 async def get_repositories(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db_connection),  # noqa: B008
+    db: AsyncConnection = Depends(get_db_connection),  # noqa: B008
 ) -> list[dict[str, object]]:
     user = _get_session_user(request)
     user_id = int(str(user["user_id"]))
@@ -189,8 +189,12 @@ async def get_repositories(
     installations = await repo.list_installations_for_user(user_id)
 
     # Retrieve user's GitHub token from DB
-    cursor = await db.execute("SELECT encrypted_token FROM users WHERE id = ?", (user_id,))
-    row = await cursor.fetchone()
+    from sqlalchemy import text
+
+    result = await db.execute(
+        text("SELECT encrypted_token FROM users WHERE id = :uid"), {"uid": user_id}
+    )
+    row = result.mappings().first()
     if not row:
         raise HTTPException(status_code=500, detail="User record not found")
 
