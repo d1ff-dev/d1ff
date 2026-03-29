@@ -32,7 +32,7 @@ jobs:
 
       # Automatically generates tags based on the trigger:
       #   tag v1.2.3 → 1.2.3, 1.2, 1, latest
-      #   push main  → main
+      #   push main  → main, sha-abc1234
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -43,6 +43,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=ref,event=branch
+            type=sha,prefix=sha-
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -53,3 +54,31 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER }}
+          password: ${{ secrets.DROPLET_PASSWORD }}
+          script: |
+            cd /opt/d1ff
+            docker compose pull d1ff
+            docker compose up -d d1ff
+
+            # Health check — wait up to 60s
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+                echo "Deploy OK — $(docker compose images d1ff --format '{{.Tag}}')"
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Health check failed"
+            exit 1
