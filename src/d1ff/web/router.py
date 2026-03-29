@@ -52,6 +52,26 @@ async def _exchange_code_for_token(code: str) -> str | None:
         return str(data["access_token"]) if "access_token" in data else None
 
 
+def _determine_redirect(
+    session: dict[str, object],
+    installation_count: int,
+    has_setup_action: bool,
+) -> str:
+    """Decide where to send the user after OAuth.
+
+    Priority:
+    1. return_to URL saved by require_login
+    2. /repositories if user has installations OR just completed app installation
+    3. /setup if no installations
+    """
+    return_to = session.pop("return_to", None)
+    if return_to and isinstance(return_to, str):
+        return return_to
+    if installation_count > 0 or has_setup_action:
+        return "/repositories"
+    return "/setup"
+
+
 async def _create_session(
     request: Request,
     access_token: str,
@@ -83,6 +103,11 @@ async def _create_session(
 
     # Fetch user's installations from GitHub API and sync.
     installation_ids: list[int] = []
+    # Query DB BEFORE sync — sync_user_installations wipes the join table,
+    # so we need the pre-sync count as a fallback if the API fails.
+    db_installations = await repo.list_installations_for_user(user_id)
+    db_installation_count = len(db_installations)
+    api_succeeded = False
     page = 1
     try:
         while True:
@@ -99,9 +124,11 @@ async def _create_session(
             batch = installations_data.get("installations", [])
             installation_ids.extend(inst["id"] for inst in batch)
             if len(batch) < 100:
+                api_succeeded = True
                 break
             page += 1
-        await repo.sync_user_installations(user_id, installation_ids)
+        if api_succeeded:
+            await repo.sync_user_installations(user_id, installation_ids)
     except Exception:
         logger.exception("installation_sync_failed")
 
@@ -113,12 +140,20 @@ async def _create_session(
         "user_id": user_id,
     }
 
+    # Use API count if API succeeded, otherwise fall back to pre-sync DB count.
+    # Important: don't use truthiness of installation_ids — an empty list from
+    # a successful API call means the user genuinely has 0 installations.
+    effective_count = len(installation_ids) if api_succeeded else db_installation_count
+    has_setup_action = request.query_params.get("setup_action") == "install"
+    redirect_url = _determine_redirect(request.session, effective_count, has_setup_action)
+
     logger.info(
         "user_logged_in",
         login=user_data["login"],
         installations_synced=len(installation_ids),
+        redirect=redirect_url,
     )
-    return RedirectResponse(url="/repositories", status_code=302)
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 @router.get("/auth/github/callback", name="github_callback")

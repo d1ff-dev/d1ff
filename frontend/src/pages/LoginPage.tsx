@@ -58,7 +58,7 @@ function BackgroundLines() {
 }
 
 export default function LoginPage() {
-  const { user, loading, appConfig } = useAuth()
+  const { user, loading } = useAuth()
   const [searchParams] = useSearchParams()
   const isSignIn = searchParams.get('mode') === 'signin'
 
@@ -136,7 +136,7 @@ export default function LoginPage() {
               <div className="mt-6 flex flex-col gap-3">
                 {/* GitHub button */}
                 <a
-                  href={isSignIn ? '/auth/github/login' : (appConfig?.github_app_install_url || '#')}
+                  href="/auth/github/login"
                   className="group relative flex items-center gap-4 border border-border bg-bg-elevated p-4 transition-colors hover:border-green/30"
                 >
                   <span className="absolute right-3 top-3 inline-flex h-5 items-center rounded-full bg-green/15 px-2 font-mono text-[11px] text-green">
@@ -150,7 +150,7 @@ export default function LoginPage() {
                       {isSignIn ? 'Sign in with GitHub' : 'Sign up with GitHub'}
                     </span>
                     <span className="block font-body text-xs text-fg-muted">
-                      {isSignIn ? 'Continue with your GitHub account' : 'Install the app and get reviews in 60 seconds'}
+                      {isSignIn ? 'Continue with your GitHub account' : 'Connect your GitHub and get reviews in 60 seconds'}
                     </span>
                   </div>
                 </a>
