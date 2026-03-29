@@ -79,8 +79,9 @@ def run_alembic_upgrade(database_url: str) -> None:
     """
     import concurrent.futures
 
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     def _upgrade() -> None:
         alembic_cfg = Config("alembic.ini")
