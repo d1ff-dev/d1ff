@@ -48,21 +48,24 @@ async def test_require_login_returns_user_from_session() -> None:
 
 
 async def test_require_login_redirects_when_no_session() -> None:
-    """require_login dependency returns RedirectResponse when session has no user."""
+    """require_login redirects to /login and saves return_to in session."""
     from starlette.requests import Request
     from starlette.responses import RedirectResponse
 
+    session: dict[str, object] = {}
     scope = {
         "type": "http",
         "method": "GET",
         "path": "/settings",
         "query_string": b"",
         "headers": [],
-        "session": {},
+        "session": session,
+        "server": ("testserver", 80),
+        "scheme": "http",
     }
     request = Request(scope)
 
     result = await require_login(request)
     assert isinstance(result, RedirectResponse)
-
-
+    assert result.headers["location"] == "/login"
+    assert session["return_to"] == "http://testserver/settings"
