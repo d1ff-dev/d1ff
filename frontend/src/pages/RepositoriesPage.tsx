@@ -66,6 +66,8 @@ export default function RepositoriesPage() {
           </div>
           <a
             href={appConfig?.github_app_install_url || '#'}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-2 bg-green px-4 py-2.5 font-mono text-sm font-bold text-bg transition-all hover:shadow-[0_0_24px_rgba(29,158,117,0.3)] hover:brightness-110"
           >
             <span className="text-lg">+</span> Add Repositories

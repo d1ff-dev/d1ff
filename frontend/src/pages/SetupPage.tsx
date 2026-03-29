@@ -46,7 +46,7 @@ export default function SetupPage() {
             Welcome, {user?.name || user?.login}!
           </h1>
           <p className="mt-3 font-body text-sm leading-relaxed text-fg-muted">
-            Install d1ff on your GitHub account to start getting AI code reviews on your pull requests.
+            Select the repositories you want d1ff to review.
           </p>
 
           <a
@@ -54,7 +54,7 @@ export default function SetupPage() {
             className="mt-6 flex items-center justify-center gap-3 bg-green px-6 py-3 font-mono text-sm font-bold text-bg transition-all hover:shadow-[0_0_24px_rgba(29,158,117,0.3)] hover:brightness-110"
           >
             <GitHubIcon />
-            Install on GitHub
+            Choose repositories
           </a>
 
           <p className="mt-4 text-center font-body text-xs text-fg-muted">
